@@ -1,0 +1,30 @@
+# Crea el instalador de Windows (.exe) y el de Linux cada vez que subes cambios a GitHub.
+# Los instaladores quedan en la pestaña «Actions» → la ejecución → «Artifacts».
+name: Construir instaladores
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install
+      - run: npm run dist:win
+      - uses: actions/upload-artifact@v4
+        with: { name: atrapacuentos-windows, path: instaladores/*.exe }
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install
+      - run: npm run dist:linux
+      - uses: actions/upload-artifact@v4
+        with: { name: atrapacuentos-linux, path: |
+            instaladores/*.AppImage
+            instaladores/*.deb }

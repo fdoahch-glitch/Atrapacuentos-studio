@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atrapacuentos Studio · Creador de animaciones de cuentos</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#12141c;color:#e9ebf5;font-family:system-ui,Segoe UI,Roboto,sans-serif;font-size:13px}
+body{display:grid;grid-template-rows:52px 1fr;overflow:hidden}
+button,select,input{font:inherit}
+button{background:#2a2f45;color:#fff;border:0;border-radius:9px;padding:8px 12px;cursor:pointer}
+button:hover{background:#363c5a}button.pri{background:#7a5cff}button.pri:hover{background:#8d72ff}button.go{background:#2fbf6a;color:#06210f;font-weight:700}
+button.on{background:#7a5cff}button:disabled{opacity:.4;cursor:default}
+select{background:#1b1e2c;color:#fff;border:1px solid #343a58;border-radius:9px;padding:7px 8px}
+/* barra superior */
+#top{display:flex;align-items:center;gap:10px;padding:0 12px;background:#191c2a;border-bottom:1px solid #2a2f45}
+#top h1{font-size:15px;margin:0 8px 0 0;white-space:nowrap}#top h1 span{color:#ffb347}
+.seg{display:flex;background:#1b1e2c;border-radius:10px;padding:3px;gap:2px}.seg button{background:none;padding:6px 11px;border-radius:8px;color:#aab}.seg button.on{background:#7a5cff;color:#fff}
+.sp{flex:1}
+#info{font-size:11px;opacity:.55;white-space:nowrap}
+/* cuerpo */
+#main{display:grid;grid-template-columns:78px 276px minmax(0,1fr) 310px;min-height:0}
+#rail{background:#161824;display:flex;flex-direction:column;gap:2px;padding:8px 6px;overflow-y:auto;border-right:1px solid #2a2f45}
+.rb{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 2px;border-radius:10px;background:none;font-size:11px;color:#b9bdd4;width:100%}
+.rb big{font-size:20px;line-height:1}.rb.on{background:#2c3052;color:#fff}.rb:hover{background:#23263c}
+#libp{background:#1a1d2b;display:flex;flex-direction:column;min-height:0;border-right:1px solid #2a2f45}
+#libHead{padding:10px;display:flex;flex-direction:column;gap:7px}
+#libHead h3{margin:0;font-size:14px}
+#q{width:100%;background:#12141c;border:1px solid #343a58;color:#fff;border-radius:9px;padding:8px 10px}
+#libBody{flex:1;overflow:auto;padding:0 10px 12px}
+.sec{font-size:11px;text-transform:uppercase;letter-spacing:.06em;opacity:.55;margin:12px 0 6px}
+.chips{display:flex;flex-wrap:wrap;gap:5px}.chip{padding:5px 9px;border-radius:99px;background:#252941;font-size:12px}.chip.on{background:#7a5cff}
+#grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.tile{background:#242842;border-radius:10px;padding:5px;text-align:center;font-size:11px;cursor:grab;border:2px solid transparent;user-select:none}
+.tile:hover{border-color:#7a5cff}.tile canvas,.tile img{width:100%;aspect-ratio:1;display:block;border-radius:7px;background:#dfeef8;object-fit:cover;pointer-events:none}
+.tile .nm{margin-top:4px;opacity:.9}
+.tile.add{display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed #4a5078;color:#b9c;min-height:100px;cursor:pointer}
+.tile.add big{font-size:26px}
+/* lienzo */
+#center{display:flex;flex-direction:column;min-width:0;min-height:0;background:#0e1016}
+#stageArea{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:14px}
+#frame{position:relative;aspect-ratio:16/9;width:100%;max-height:100%;max-width:calc((100vh - 52px - 28px - 62px - 60px) * 16 / 9);border-radius:12px;overflow:hidden;box-shadow:0 0 0 2px #7a5cff55,0 12px 40px #0008;background:#000}
+#cv{width:100%;height:100%;display:block;touch-action:none;outline:none}
+#camTag{position:absolute;left:10px;top:10px;background:#000a;padding:4px 10px;border-radius:99px;font-size:11px;pointer-events:none}
+#status{position:absolute;left:10px;right:10px;bottom:10px;background:#000b;padding:6px 10px;border-radius:9px;font-size:12px;pointer-events:none;width:fit-content;max-width:calc(100% - 20px)}
+#hud{position:absolute;top:10px;right:10px;display:flex;gap:10px;align-items:center;background:#000c;padding:6px 10px;border-radius:10px;z-index:3}
+#hud[hidden]{display:none}
+#drop{position:absolute;inset:0;border:3px dashed #7a5cff;background:#7a5cff22;display:none;align-items:center;justify-content:center;font-size:18px;pointer-events:none}
+#frame.over #drop{display:flex}
+#timeline{display:flex;align-items:center;gap:8px;padding:6px 14px;background:#12141c;border-top:1px solid #2a2f45;min-height:58px}
+#tlCards{display:flex;gap:6px;overflow-x:auto;flex:1;padding-bottom:2px}
+.sc{flex:none;min-width:130px;background:#232740;border:2px solid transparent;border-radius:10px;padding:6px 10px;cursor:pointer}
+.sc.on{border-color:#7a5cff;background:#2d2f55}.sc b{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}.sc small{opacity:.7;font-size:11px}
+#tlTotal{opacity:.6;font-size:12px;white-space:nowrap}
+#bar{display:flex;align-items:center;gap:10px;padding:8px 14px 12px;min-height:62px;flex-wrap:wrap}
+#guideMsg{flex:1;min-width:200px;opacity:.85}
+/* propiedades */
+#props{background:#1a1d2b;border-left:1px solid #2a2f45;overflow:auto;padding:12px}
+#props h3{margin:0 0 2px;font-size:15px}#props .sub{opacity:.6;font-size:12px;margin-bottom:10px}
+.card{background:#232740;border-radius:12px;padding:10px;margin:8px 0}
+.card h4{margin:0 0 8px;font-size:12px;color:#ffb347}
+.row{display:flex;align-items:center;gap:8px;margin:6px 0}.row>span{width:96px;flex:none;opacity:.85}.row input[type=range]{flex:1;min-width:0}.row select{flex:1;min-width:0}
+.row input[type=color]{width:42px;height:28px;border:0;padding:0;background:none}
+.btns{display:flex;flex-wrap:wrap;gap:6px}.btns button{flex:1}
+details.card summary{cursor:pointer;font-weight:600;color:#ffb347;font-size:12px}
+details.card[open] summary{margin-bottom:8px}
+.danger{background:#5a2330}.danger:hover{background:#7a2c3d}
+/* ventanas */
+.modal{position:fixed;inset:0;background:#0a0b12e8;z-index:20;display:flex;align-items:center;justify-content:center;padding:10px}
+.modal[hidden]{display:none}
+.mbox{background:#1d2030;border:1px solid #4a4470;border-radius:16px;max-width:760px;width:100%;max-height:94vh;overflow:auto;padding:18px}
+.mbox h2{margin:0 0 4px;font-size:20px;color:#ffb347}.mbox p{margin:4px 0 12px;opacity:.85}
+.opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:8px 0}
+.opt{background:#2b3050;border:2px solid transparent;border-radius:12px;padding:12px;cursor:pointer;text-align:center}
+.opt:hover{border-color:#ffb347}.opt.on{border-color:#ffb347;background:#3c3560}.opt big{display:block;font-size:28px;margin-bottom:3px}.opt small{display:block;opacity:.7;margin-top:3px;font-size:11px}
+.wnav{display:flex;gap:8px;justify-content:space-between;margin-top:14px;align-items:center}.wnav .dots{opacity:.6;font-size:12px}
+.mbox input[type=text]{width:100%;background:#12141c;border:1px solid #3a4064;color:#fff;border-radius:9px;padding:9px;margin:4px 0 10px}
+.wbox{background:#262a3e;border-radius:10px;padding:10px;margin:8px 0}
+.wrow{display:flex;gap:8px;align-items:center;margin:6px 0}.wrow span{width:130px;flex:none}.wrow select{flex:1;max-width:none}
+#shot{position:fixed;inset:0;background:#000d;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;z-index:30}
+#shot[hidden]{display:none}#shot img{max-width:94vw;max-height:80vh;border-radius:8px}
+@media (max-width:1050px){#main{grid-template-columns:64px 220px minmax(0,1fr)}#props{position:fixed;right:0;top:52px;bottom:0;width:300px;z-index:10;box-shadow:-10px 0 30px #000a}}
+</style>
+</head>
+<body>
+<div id="top">
+  <h1>Atrapa<span>cuentos</span> Studio</h1>
+  <div class="seg" id="segStyle"><button data-es="2d">2D</button><button data-es="2.5d" class="on">2.5D</button><button data-es="3d">3D</button></div>
+  
+  <span class="sp"></span><span id="info"></span>
+  <button id="bUndo" title="Deshacer (Ctrl+Z)" disabled>↩</button><button id="bRedo" title="Rehacer (Ctrl+Y)" disabled>↪</button><button id="bWiz">🧙 Asistente</button><button id="bProj">💾 Proyecto</button><button id="bShot">📷 Foto</button><button id="bDiag" title="Revisar mi equipo">🩺</button><button id="bSub" title="Subtítulos">💬 Subtítulos</button><button id="bDub">🎙 Doblaje</button><button id="bExp">🎞 Exportar MP4</button><button id="bPlayAll">▶▶ Ver todo</button><button id="bPlay" class="go">▶ Vista previa</button>
+</div>
+<div id="main">
+  <div id="rail"></div>
+  <div id="libp"><div id="libHead"><h3 id="libTitle">Biblioteca</h3><input id="q" placeholder="Buscar elementos…"></div><div id="libBody"></div></div>
+  <div id="center">
+    <div id="stageArea"><div id="frame"><canvas id="cv"></canvas><canvas id="subCv" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></canvas><div id="camTag">📷 Cámara · lo que verá el espectador</div><div id="hud" hidden><span id="hudT"></span><button id="hudStop">⏹ Detener</button></div><div id="status">Cargando Babylon.js…</div><div id="drop">Suelta aquí para colocarlo</div></div></div>
+    <div id="timeline"><div id="tlCards"></div><button id="bAddScene">＋ Escena</button><span id="tlTotal"></span></div>
+<div id="bar"><span id="guideMsg"></span><button id="bAddChar" class="pri">👤 Agregar personaje</button></div>
+  </div>
+  <div id="props"></div>
+</div>
+<div id="sceneProps" hidden>
+  <div class="card"><h4>Momento del día</h4><div class="btns"><button data-pre="dia">☀️ Día</button><button data-pre="atardecer">🌇 Tarde</button><button data-pre="noche">🌙 Noche</button></div></div>
+  <details class="card" open><summary>Efectos de cine</summary>
+    <div class="row"><span>Brillo</span><input id="sBloom" type="range" min="0" max="150" value="30"></div>
+    <div class="row"><span>Desenfoque</span><input id="sBlur" type="range" min="0" max="100" value="45"></div>
+    <div class="row"><span>Foco (m)</span><input id="sFocus" type="range" min="4" max="60" value="18"></div>
+    <div class="row"><span>Exposición</span><input id="sExp" type="range" min="50" max="180" value="105"></div></details>
+  <details class="card"><summary>Ambiente y cámara</summary>
+    <div class="row"><span>Niebla</span><input id="sFog" type="range" min="0" max="100" value="22"></div>
+    <div class="row"><span>Viento</span><input id="sWind" type="range" min="0" max="150" value="50"></div>
+    <div class="row"><span>Lente (°)</span><input id="sFov" type="range" min="30" max="80" value="46"></div>
+    <div class="btns"><button id="bOrbit">🎥 Recorrido</button></div></details>
+  <details class="card"><summary>Avanzado</summary><div class="btns"><button id="bGPU">Probar WebGPU</button></div></details>
+</div>
+<input id="fUp" type="file" hidden>
+<div id="addChar" class="modal" hidden><div class="mbox"><h2>👤 Agregar personaje</h2><p>Elige cómo quieres crear tu personaje. Después lo puedes editar y moverlo en el lienzo.</p>
+  <div class="opts">
+    <div class="opt" id="acBase"><big>🙂</big>Personaje base<small>Con colores editables</small></div>
+    <div class="opt" id="acFab"><big>🧸</big>Personajes listos<small>Cerdito, lobo, Caperucita, niño y niña ya con esqueleto</small></div>
+    <div class="opt" id="acImg"><big>🦴</big>Crear desde mi dibujo<small>Con esqueleto: camina y mueve brazos y piernas</small></div>
+    <div class="opt" id="acFlat"><big>🖼️</big>Imagen simple<small>PNG o JPG sin partes móviles</small></div>
+    <div class="opt" id="acGlb"><big>🧊</big>Subir modelo 3D<small>Archivo .glb o .gltf</small></div>
+  </div><div class="wnav"><button id="acClose">Cerrar</button></div></div></div>
+<div id="wiz" class="modal" hidden><div class="mbox" id="wizBox"></div></div>
+<div id="exp" class="modal" hidden><div class="mbox" id="expBox">
+<h2>🎞 Exportar tu cuento a MP4</h2>
+<div id="expOpts"><p>Se crea un video de todo el cuento, escena por escena, listo para subir a YouTube. <b id="expInfo"></b></p>
+<p><b>Calidad</b><br><label><input type="radio" name="expRes" value="720"> 720p (rápido)</label> &nbsp; <label><input type="radio" name="expRes" value="1080" checked> 1080p (recomendado)</label></p>
+<p><b>Fluidez</b><br><label><input type="radio" name="expFps" value="30" checked> 30 cuadros/s</label> &nbsp; <label><input type="radio" name="expFps" value="60"> 60 cuadros/s (más suave, tarda el doble)</label></p>
+<p><b>Subtítulos</b><br><label><input type="checkbox" id="expSub"> Dentro del video</label> <small style="opacity:.7">(si lo desmarcas, el video sale limpio y puedes guardar los subtítulos aparte en .srt)</small></p>
+<p id="expWarn" style="color:#ff9d9d" hidden></p>
+<button id="expGo" class="go">🎬 Crear video</button> <button id="expClose">Cerrar</button></div>
+<div id="expProg" hidden><p id="expTxt">Creando video…</p><div style="background:#12141c;border-radius:9px;height:16px;overflow:hidden"><div id="expBar" style="height:100%;width:0;background:#ffb347"></div></div><p><small>No cierres esta ventana. El lienzo muestra el avance.</small></p><button id="expCancel">Cancelar</button></div>
+<div id="expDone" hidden><p id="expRes"></p><video id="expVid" controls style="max-width:100%;border-radius:8px"></video><p><a id="expDl" class="go" style="display:inline-block;padding:9px 14px;border-radius:9px;text-decoration:none">⬇ Descargar MP4</a> <button id="expSrtBtn" hidden>⬇ Subtítulos (.srt)</button> <button id="expClose2">Cerrar</button></p><small>Si la descarga no empieza, haz clic derecho sobre el video → «Guardar video como».</small></div>
+</div></div>
+<div id="shot" hidden><img id="shotImg" alt="Foto"><button id="shotClose">Cerrar</button><small>Mantén presionada la imagen (o clic derecho) para guardarla.</small></div>
+<script src="https://cdn.jsdelivr.net/npm/babylonjs@7/babylon.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/babylonjs-loaders@7/babylonjs.loaders.min.js"></script>
+<script>window.EST={};</script>
+<script src="js/assets.js"></script>
+<script src="js/library.js"></script>
+<script src="js/procgen.js"></script>
+<script src="js/geo.js"></script><script src="js/thumb.js"></script><script src="js/catalog.js"></script><script src="js/cat_nature.js"></script><script src="js/cat_build.js"></script><script src="js/cat_space.js"></script><script src="js/cat_juego.js"></script><script src="js/cat_fauna.js"></script>
+<script src="js/stage.js"></script>
+<script src="js/puppet.js"></script>
+<script src="js/lib3d.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5/build/mp4-muxer.js"></script>
+<script src="js/wizard.js"></script>
+<script src="js/factory.js"></script>
+<script src="js/depthai.js"></script>
+<script src="js/subs.js"></script>
+<script src="js/dubx.js"></script>
+<script src="js/dubfx.js"></script>
+<script src="js/scenery.js"></script>
+<script src="js/recon.js"></script>
+<script src="js/diag.js"></script>
+<script src="js/packs.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/dub.js"></script>
+<script src="js/export.js"></script>
+</body>
+</html>

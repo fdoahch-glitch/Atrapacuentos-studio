@@ -1,0 +1,33 @@
+{
+  "name": "atrapacuentos-studio",
+  "productName": "Atrapacuentos Studio",
+  "version": "1.0.0",
+  "description": "Crea cuentos animados arrastrando y soltando y expórtalos a MP4",
+  "main": "main.js",
+  "author": "Atrapacuentos",
+  "license": "UNLICENSED",
+  "scripts": {
+    "preparar": "node prepare.js",
+    "start": "node prepare.js && electron .",
+    "dist:win": "node prepare.js && electron-builder --win",
+    "dist:linux": "node prepare.js && electron-builder --linux"
+  },
+  "dependencies": {
+    "babylonjs": "^7.0.0",
+    "babylonjs-loaders": "^7.0.0",
+    "mp4-muxer": "^5.0.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "cl.atrapacuentos.studio",
+    "productName": "Atrapacuentos Studio",
+    "files": ["main.js", "app/**/*", "package.json"],
+    "directories": { "output": "instaladores" },
+    "win": { "target": ["nsis", "portable"] },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true },
+    "linux": { "target": ["AppImage", "deb"], "category": "Graphics" }
+  }
+}
