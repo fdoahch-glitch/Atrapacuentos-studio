@@ -20,17 +20,20 @@ function init(){
     {const sb=$("expSub");if(sb){const st=S.proj.sub||{};sb.checked=st.on!==false&&st.burn!==false;sb.onchange=()=>{S.proj.sub=Object.assign({},window.Dub&&Dub.SUBDEF,S.proj.sub||{});S.proj.sub.burn=sb.checked;if(sb.checked)S.proj.sub.on=true;S.changed();};}}
     show(true,false,false);$("exp").hidden=false;
   }
+  /* Codificador: siempre se pide la GPU. Si el equipo no puede, se usa la CPU y se avisa al final. */
   async function pickConfig(W,H,fps,bitrate){
-    for(const codec of ["avc1.640034","avc1.640032","avc1.64002A","avc1.4D0028","avc1.42E01F"]){
-      const cfg={codec,width:W,height:H,bitrate,framerate:fps,avc:{format:"avc"}};
-      try{const r=await VideoEncoder.isConfigSupported(cfg);if(r&&r.supported)return r.config||cfg;}catch(e){}
+    for(const hw of ["prefer-hardware","no-preference"]){
+      for(const codec of ["avc1.640034","avc1.640032","avc1.64002A","avc1.4D0028","avc1.42E01F"]){
+        const cfg={codec,width:W,height:H,bitrate,framerate:fps,avc:{format:"avc"},hardwareAcceleration:hw};
+        try{const r=await VideoEncoder.isConfigSupported(cfg);if(r&&r.supported){const c=Object.assign({},r.config||cfg);c.hardwareAcceleration=hw;c._gpu=hw==="prefer-hardware";return c;}}catch(e){}
+      }
     }
     return null;
   }
   async function start(){
     const H=+document.querySelector("input[name=expRes]:checked").value,W=Math.round(H*16/9/2)*2;
     const fps=+document.querySelector("input[name=expFps]:checked").value;
-    const bitrate=Math.round((H>=2160?35e6:H>=1440?16e6:H>=1080?9e6:5e6)*(fps===60?1.5:1));
+    const bitrate=Math.round((H>=2160?35e6:H>=1440?16e6:H>=1080?9e6:5e6)*(fps>=50?1.5:1));
     const cfg=await pickConfig(W,H,fps,bitrate);
     if(!cfg){$("expWarn").hidden=false;$("expWarn").textContent="Tu equipo no pudo preparar el codificador de video. Prueba con 720p.";if(window.__onExportErr)__onExportErr("Tu equipo no pudo preparar el codificador de video.");return;}
     const total=Math.round(S.totalSeconds()*fps);
@@ -48,7 +51,7 @@ function init(){
     const muxer=new Mp4Muxer.Muxer({target:new Mp4Muxer.ArrayBufferTarget(),video:{codec:"avc",width:W,height:H},audio:mix?{codec:ac.mux,numberOfChannels:2,sampleRate:ac.sr}:undefined,fastStart:"in-memory"});
     let err=null;
     const enc=new VideoEncoder({output:(c,m)=>muxer.addVideoChunk(c,m),error:e=>{err=e;}});
-    enc.configure(cfg);
+    const usoGpu=cfg._gpu;delete cfg._gpu;enc.configure(cfg);
     const cv=$("cv"),eng=A.engine,oldLevel=eng.getHardwareScalingLevel();
     eng.setHardwareScalingLevel(Math.max(.25,cv.clientWidth/W));eng.resize();
     const tmp=document.createElement("canvas");tmp.width=W;tmp.height=H;const g=tmp.getContext("2d");
@@ -89,7 +92,7 @@ function init(){
           if(lastUrl)URL.revokeObjectURL(lastUrl);lastUrl=URL.createObjectURL(blob);
           const nm=((S.proj.nombre||"mi-cuento").replace(/[^\wáéíóúñÁÉÍÓÚÑ -]/g,"").trim()||"mi-cuento").replace(/\s+/g,"-");
           $("expVid").src=lastUrl;$("expDl").href=lastUrl;$("expDl").download=nm+".mp4";
-          $("expRes").textContent="¡Listo! "+W+"×"+H+" · "+fps+" cuadros/s · "+fmt(n/fps)+" · "+(blob.size/1048576).toFixed(1)+" MB"+(mix?" · con voz":(noAudioMsg?" · "+noAudioMsg:""));
+          $("expRes").textContent="¡Listo! "+W+"×"+H+" · "+fps+" cuadros/s · "+fmt(n/fps)+" · "+(blob.size/1048576).toFixed(1)+" MB"+(usoGpu?" · codificado con GPU":" · codificado con CPU (tu equipo no ofreció GPU)")+(mix?" · con voz":(noAudioMsg?" · "+noAudioMsg:""));
           show(false,false,true);
           if(window.__onExportDone)__onExportDone(blob,nm,$("expRes").textContent);
           {const sb=$("expSrtBtn");if(sb){sb.hidden=!(window.Subs&&Subs.cues().length);sb.onclick=()=>Subs.downloadSrt();}}
