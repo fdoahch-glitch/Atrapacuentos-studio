@@ -4,13 +4,13 @@
   "version": "1.0.0",
   "description": "Crea cuentos animados arrastrando y soltando y expórtalos a MP4",
   "main": "main.js",
-  "author": "Atrapacuentos",
+  "author": "Atrapacuentos <contacto@atrapacuentos.cl>",
   "license": "UNLICENSED",
   "scripts": {
     "preparar": "node prepare.js",
     "start": "node prepare.js && electron .",
-    "dist:win": "node prepare.js && electron-builder --win",
-    "dist:linux": "node prepare.js && electron-builder --linux"
+    "dist:win": "node prepare.js && electron-builder --win --publish never",
+    "dist:linux": "node prepare.js && electron-builder --linux --publish never"
   },
   "dependencies": {
     "babylonjs": "^7.0.0",
