@@ -94,3 +94,11 @@ solo el instalador de Windows (.exe) y el de Linux cada vez que subas cambios (p
 - Rhubarb está pensado para inglés; en español mueve la boca de forma aproximada.
 - Exportar en segundo plano usa el mismo procesador: el editor puede ir más lento mientras tanto.
 - Si tu equipo no puede guardar audio AAC en el MP4, se usa Opus (YouTube lo acepta).
+
+## 🏠 Pantalla de inicio (nuevo)
+Al abrir el programa aparece un inicio con tres opciones:
+- **Crear proyecto nuevo**: eliges *Animación* (una pieza) o *Serie* (varios capítulos), el formato (16:9 YouTube, 9:16 Shorts/Reels, 1:1 cuadrado), la resolución base (720p, 1080p, 2K, 4K) y los cuadros por segundo. El lienzo queda totalmente en blanco, con fondo liso.
+- **Abrir proyecto guardado**: archivos `.atrapa` o `.atrapacuentos`. Si hay un guardado automático, también aparece «Continuar».
+- **Asistente de proyecto**: 10 cuentos clásicos de dominio público ya armados (Los tres cerditos, Caperucita Roja, El patito feo, La liebre y la tortuga, Ricitos de Oro, La cigarra y la hormiga, El gato con botas, Hansel y Gretel, El león y el ratón, Los músicos de Bremen), con escenas, fondos y narración editables, en el formato que elijas.
+
+El lienzo se puede cambiar después en **💾 Proyecto → Configuración del lienzo**. Al exportar, la calidad elegida es el lado corto del video (en vertical, 1080p = 1080×1920).

@@ -31,9 +31,9 @@ async function psd(file){
   const buf=await leer(file),p=agPsd.readPsd(buf,{skipThumbnail:true,useImageData:false});
   const L=capas(p,[]);if(!L.length)throw new Error("Este PSD no tiene capas visibles con dibujo.");
   const ids=[];L.forEach((l,i)=>{ids.push({id:agregar((l.name||("capa "+(i+1))),"elemento",l.canvas),l});});
-  const k=Math.min(1280/p.width,720/p.height),sc=S().curScene();let puesto=0;
+  const dm=S().dim(),k=Math.min(dm.w/p.width,dm.h/p.height),sc=S().curScene();let puesto=0;
   if(confirm("Encontré "+L.length+" capas. ¿Ponerlas en la escena, cada una en su lugar? (Cancelar = solo guardarlas en Mis imágenes)")){
-    for(const {id,l} of ids){const w=l.right-l.left,h=l.bottom-l.top;sc.items.push({uid:"i"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),kind:"img",ref:id,x:Math.round(((l.left+l.right)/2)*k+(1280-p.width*k)/2),y:Math.round(l.bottom*k+(720-p.height*k)/2),s:1,d:60,h0:Math.round(h*k)});puesto++;}
+    for(const {id,l} of ids){const w=l.right-l.left,h=l.bottom-l.top;sc.items.push({uid:"i"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),kind:"img",ref:id,x:Math.round(((l.left+l.right)/2)*k+(dm.w-p.width*k)/2),y:Math.round(l.bottom*k+(dm.h-p.height*k)/2),s:1,d:60,h0:Math.round(h*k)});puesto++;}
   }
   return {n:L.length,ids:ids.map(o=>o.id),puesto};
 }

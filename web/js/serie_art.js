@@ -233,12 +233,13 @@ function layerCanvas(bg,i,res){
   const ks=Object.keys(LC);if(ks.length>40){for(const k of ks.slice(0,10))delete LC[k];}
   return LC[key]=cv;
 }
-function dibujarFondo(g,bg,sx,sy,z,res,cam,tint){
-  /* sx = unidades de escena -> píxeles; cam={x,y} en unidades; z zoom */
+function dibujarFondo(g,bg,sx,sy,z,res,cam,tint,uw){
+  /* sx = unidades de escena -> píxeles; cam={x,y} en unidades; z zoom; uw = ancho de la escena (1280 horizontal) */
+  const cx=(uw||1280)/2;
   for(let i=0;i<bg.L.length;i++){
     const L=bg.L[i],cv=layerCanvas(bg,i,Math.max(.4,Math.min(1.5,sx*z)));
-    const pf=L.pf,ox=-640-cam.x*pf,oy=-cam.y*pf*.5;
-    g.save();g.translate(640*sx,360*sy);g.scale(z,z);g.translate(-640*sx,-360*sy);
+    const pf=L.pf,ox=cx-1280-cam.x*pf,oy=-cam.y*pf*.5;
+    g.save();g.translate(cx*sx,360*sy);g.scale(z,z);g.translate(-cx*sx,-360*sy);
     g.drawImage(cv,ox*sx,oy*sy,BW*sx,BH*sy);g.restore();
   }
 }

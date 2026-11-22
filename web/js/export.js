@@ -18,6 +18,7 @@ function init(){
     if(!supported()){w.hidden=false;w.textContent="Este navegador no puede crear MP4. Usa Chrome o Edge actualizados (o la aplicación de escritorio).";$("expGo").disabled=true;}
     else{w.hidden=true;$("expGo").disabled=false;}
     {const sb=$("expSub");if(sb){const st=S.proj.sub||{};sb.checked=st.on!==false&&st.burn!==false;sb.onchange=()=>{S.proj.sub=Object.assign({},window.Dub&&Dub.SUBDEF,S.proj.sub||{});S.proj.sub.burn=sb.checked;if(sb.checked)S.proj.sub.on=true;S.changed();};}}
+    {const lz=S.dim().lienzo,r=document.querySelector("input[name=expRes][value='"+lz.base+"']"),f=document.querySelector("input[name=expFps][value='"+lz.fps+"']");if(r)r.checked=true;if(f)f.checked=true;}
     show(true,false,false);$("exp").hidden=false;
   }
   /* Codificador: siempre se pide la GPU. Si el equipo no puede, se usa la CPU y se avisa al final. */
@@ -31,9 +32,11 @@ function init(){
     return null;
   }
   async function start(){
-    const H=+document.querySelector("input[name=expRes]:checked").value,W=Math.round(H*16/9/2)*2;
+    const tier=+document.querySelector("input[name=expRes]:checked").value,dm=S.dim(),asp=dm.asp;
+    /* el valor elegido (720, 1080…) es el lado corto del video, según el formato del lienzo */
+    const W=asp>=1?Math.round(tier*asp/2)*2:tier,H=asp>=1?tier:Math.round(tier/asp/2)*2;
     const fps=+document.querySelector("input[name=expFps]:checked").value;
-    const bitrate=Math.round((H>=2160?35e6:H>=1440?16e6:H>=1080?9e6:5e6)*(fps>=50?1.5:1));
+    const px=W*H,bitrate=Math.round((px>=7e6?35e6:px>=3.5e6?16e6:px>=1.9e6?9e6:5e6)*(fps>=50?1.5:1));
     const cfg=await pickConfig(W,H,fps,bitrate);
     if(!cfg){$("expWarn").hidden=false;$("expWarn").textContent="Tu equipo no pudo preparar el codificador de video. Prueba con 720p.";if(window.__onExportErr)__onExportErr("Tu equipo no pudo preparar el codificador de video.");return;}
     const total=Math.round(S.totalSeconds()*fps);

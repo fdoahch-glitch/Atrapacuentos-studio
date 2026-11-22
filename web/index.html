@@ -132,7 +132,7 @@ input[type=number],input[type=text]{background:#12141c;border:1px solid #343a58;
 .trkMenu .mi{padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12.5px}.trkMenu .mi:hover{background:#3a3f6a}.trkMenu .mi.on{color:#ffd93d}
 .splh{height:7px;cursor:row-resize;background:#10121b;flex:none}.splh:hover{background:#7a5cff66}
 #stageArea{container-type:size}
-#frame{width:min(100cqw,calc(100cqh * 16 / 9))!important;max-width:none!important;max-height:none!important}
+#frame{width:min(100cqw,calc(100cqh * var(--asp,1.7778)))!important;max-width:none!important;max-height:none!important}
 .popbody #stageWrap #frame{max-width:none!important}
 .mez{display:grid;gap:3px;background:#12142a;border-radius:8px;padding:6px;margin:2px 0 6px;font-size:12px}.mez label{display:grid;grid-template-columns:62px 1fr 48px;gap:6px;align-items:center}.mez input{width:100%}
 </style></head><body>
@@ -158,8 +158,8 @@ input[type=number],input[type=text]{background:#12141c;border:1px solid #343a58;
   <div id="propsWrap" class="pnl" data-pid="props" data-title="Propiedades"><div id="props"></div></div>
 </div>
 <input id="fUp" type="file" hidden>
-<div id="projDlg" class="modal" hidden><div class="mbox" style="max-width:520px"><h2>💾 Proyecto</h2><p>Tu serie se guarda sola en este equipo. Para llevarla a otro computador, guárdala como archivo.</p>
- <div class="btns"><button id="pjSave" class="go">⬇ Guardar archivo</button><button id="pjOpen">📂 Abrir archivo</button><button id="pjNew" class="danger">✨ Serie nueva</button></div>
+<div id="projDlg" class="modal" hidden><div class="mbox" style="max-width:520px"><h2>💾 Proyecto</h2><p>Tu proyecto se guarda solo en este equipo. Para llevarlo a otro computador, guárdalo como archivo.</p>
+ <div class="btns"><button id="pjSave" class="go">⬇ Guardar archivo</button><button id="pjOpen">📂 Abrir archivo</button><button id="pjNew" class="pri">🏠 Inicio · nuevo proyecto</button><button id="pjLz">📐 Configuración del lienzo</button></div>
  <p style="margin-top:14px"><a href="avanzado.html" style="color:#ffb347">⚙ Avanzado: abrir el Studio 3D antiguo</a></p><div class="wnav"><span></span><button id="projClose">Cerrar</button></div></div></div>
 <div id="tallerDlg" class="modal" hidden></div>
 <div id="dibDlg" class="modal" hidden></div>
@@ -177,7 +177,7 @@ input[type=number],input[type=text]{background:#12141c;border:1px solid #343a58;
 <script>window.EST={};</script>
 <script src="vendor/mp4-muxer.js"></script>
 <script src="js/subs.js"></script><script src="js/dubx.js"></script><script src="js/dubfx.js"></script><script src="js/fx.js"></script><script src="js/dub.js"></script><script src="js/export.js"></script>
-<script src="js/serie_look.js"></script><script src="js/serie_ia.js"></script><script src="js/serie_curvas.js"></script><script src="js/serie_poses.js"></script><script src="js/serie_import.js"></script><script src="js/serie_biblio.js"></script><script src="js/serie_bg.js"></script>
+<script src="js/serie_look.js"></script><script src="js/serie_ia.js"></script><script src="js/serie_curvas.js"></script><script src="js/serie_poses.js"></script><script src="js/serie_import.js"></script><script src="js/serie_biblio.js"></script><script src="js/historias.js"></script><script src="js/inicio.js"></script><script src="js/serie_bg.js"></script>
 <script src="js/serie_art.js"></script><script src="js/serie_rig.js"></script><script src="js/actor_dino.js"></script><script src="js/serie_rigauto.js"></script><script src="js/serie_taller.js"></script><script src="js/serie_dibujo.js"></script><script src="js/serie.js"></script><script src="js/serie_panels.js"></script><script src="js/serie_tracks.js"></script>
 <div id="bgQ"></div>
 </body></html>
