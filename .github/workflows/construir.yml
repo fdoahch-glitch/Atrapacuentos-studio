@@ -45,6 +45,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
       - name: Paquetes del sistema
         run: |
           sudo apt-get update
@@ -53,8 +55,8 @@ jobs:
         run: ./scripts/bajar-binarios.sh
       - name: Pruebas del núcleo (GPU wgpu, FFmpeg, relieve)
         run: |
-          python3 -m pip install -q onnx numpy
-          python3 scripts/modelo_prueba.py "$RUNNER_TEMP/prueba.onnx"
+          python -m pip install -q onnx numpy
+          python scripts/modelo_prueba.py "$RUNNER_TEMP/prueba.onnx"
           export ATRAPA_FFMPEG="$PWD/src-tauri/bin/ffmpeg" ATRAPA_ORT_LIB="$PWD/src-tauri/bin/libonnxruntime.so" ATRAPA_MODELO_PRUEBA="$RUNNER_TEMP/prueba.onnx"
           cargo test -p atrapa-core -- --nocapture
       - name: Instaladores

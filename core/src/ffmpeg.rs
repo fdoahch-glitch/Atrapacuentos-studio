@@ -181,10 +181,11 @@ mod tests {
         eprintln!("usa {} en {}", e.usado.id, e.gpu_nombre);
         for n in 0..60 { let mut f = vec![255u8; 320 * 180 * 4]; for y in 0..180 { for x in 0..320 { let i = (y * 320 + x) * 4; f[i] = ((x + n * 4) % 256) as u8; f[i + 1] = (y * 255 / 180) as u8; f[i + 2] = 90; } } e.cuadro(&f).unwrap(); }
         e.terminar().unwrap();
-        let p = Command::new("ffprobe").args(["-v", "error", "-show_entries", "stream=codec_name,width,height,pix_fmt,color_space:format=duration", "-of", "default=nw=1"]).arg(dir.join("o.mp4")).output().unwrap();
-        let t = String::from_utf8_lossy(&p.stdout).to_string(); eprintln!("{t}");
-        assert!(t.contains("h264") && t.contains("width=320") && t.contains("aac") && t.contains("bt709"));
-        let m = Command::new("ffprobe").args(["-v", "error", "-show_entries", "stream=codec_name", "-of", "default=nw=1"]).arg(dir.join("m.mov")).output().unwrap();
-        assert!(String::from_utf8_lossy(&m.stdout).contains("prores"));
+        // se revisa el resultado con el propio FFmpeg (no hace falta ffprobe)
+        let info = |f: &Path| { let o = cmd(&ffmpeg_path()).args(["-hide_banner", "-i"]).arg(f).output().unwrap(); String::from_utf8_lossy(&o.stderr).to_string() };
+        let t = info(&dir.join("o.mp4")); eprintln!("{t}");
+        assert!(t.contains("Video: h264") && t.contains("320x180") && t.contains("Audio: aac") && t.contains("bt709") && t.contains("Duration: 00:00:02"), "mp4 inesperado");
+        let m = info(&dir.join("m.mov"));
+        assert!(m.contains("prores"), "la copia maestra debe ser ProRes");
     }
 }
