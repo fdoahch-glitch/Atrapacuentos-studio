@@ -25,6 +25,13 @@ function init(){
           if(pe)pe.textContent=mb>0?"hasta ≈ "+(mb*S.totalSeconds()/8).toFixed(0)+" MB":"";
           if(S.proj.lienzo&&S.proj.lienzo.mbps!==mb){S.proj.lienzo.mbps=mb;S.changed();}};
         m.onchange=()=>{c.value="";upd();};c.oninput=()=>{upd();};upd();}}
+    {const nat=window.Nativo&&Nativo.activo,bx=$("expNat");if(bx){bx.hidden=!nat;
+      if(nat){const info=Nativo.info,en=$("expEnc");
+        const pinta=()=>{const cod=(info&&info.codificadores)||[],c=$("expCodec").value,g=cod.find(x=>x.codec===c&&x.gpu),cpu=cod.find(x=>x.codec===c);
+          en.textContent=!info?"":g?"→ se usará tu tarjeta: "+g.marca:cpu?"→ tu tarjeta no ofrece este códec; se usará la CPU":"→ no disponible en este equipo";};
+        const op=[...$("expCodec").options];for(const o of op){const c=((info&&info.codificadores)||[]).some(x=>x.codec===o.value);o.disabled=!!info&&!c;}
+        $("expCodec").onchange=pinta;pinta();}}
+      if(nat&&Nativo.info&&!Nativo.info.ffmpeg){w.hidden=false;w.textContent="No encontré FFmpeg en el programa; se usará el motor del navegador.";}}
     show(true,false,false);$("exp").hidden=false;
   }
   /* Codificador: siempre se pide la GPU. Si el equipo no puede, se usa la CPU y se avisa al final. */
@@ -37,12 +44,65 @@ function init(){
     }
     return null;
   }
+  /* ⚙ Camino nativo: los cuadros van al núcleo Rust, que los pasa por la tarjeta de video (wgpu) y los codifica con FFmpeg
+     usando NVENC (Nvidia), AMF (AMD) o Quick Sync (Intel). */
+  async function nativo(W,H,fps,mb){
+    const nm=((S.proj.nombre||"mi-cuento").replace(/[^\wáéíóúñÁÉÍÓÚÑ -]/g,"").trim()||"mi-cuento").replace(/\s+/g,"-");
+    const salida=await Nativo.elegirVideo(nm);
+    if(!salida){show(true,false,false);return;}
+    const total=Math.round(S.totalSeconds()*fps),codec=$("expCodec").value;
+    let audio=null,noAudioMsg="";
+    if(window.Dub&&Dub.hasAudio()){
+      try{const mix=await Dub.mixdown(48000),L=mix.getChannelData(0),R=mix.numberOfChannels>1?mix.getChannelData(1):L,il=new Float32Array(L.length*2);
+        for(let i=0;i<L.length;i++){il[2*i]=L[i];il[2*i+1]=R[i];}
+        audio=await Nativo.guardarAudio(48000,2,il);}catch(e){noAudioMsg="No pude preparar el audio; el video saldrá sin voz.";}
+    }
+    const maestra=$("expMaestra")&&$("expMaestra").checked?salida.replace(/\.mp4$/i,"")+"-maestra.mov":null;
+    let info;
+    try{info=await Nativo.iniciar({w:W,h:H,fps,mbps:mb||0,codec,salida,audio,maestra,duracion:total/fps});}
+    catch(e){$("expWarn").hidden=false;$("expWarn").textContent="No pude iniciar la exportación: "+e;show(true,false,false);busy=false;if(window.__onExportErr)__onExportErr(String(e));return;}
+    const cv=$("cv"),eng=A.engine;eng.fijar(W,H);
+    const tmp=document.createElement("canvas");tmp.width=W;tmp.height=H;const g=tmp.getContext("2d",{willReadFrequently:true});
+    const cola=[];let bombeando=null,err=null,n=0;
+    const bombear=()=>bombeando||(bombeando=(async()=>{try{while(cola.length&&!err){await Nativo.cuadro(cola.shift());}}catch(e){err=e;}bombeando=null;})());
+    const ex={fps,cancelled:false,
+      skip(){return cola.length>=3&&!err;},
+      capture(){
+        if(err||ex.cancelled)return;
+        g.drawImage(cv,0,0,W,H);if(window.Fx)Fx.draw(g,W,H);if(window.Dub)Dub.drawSub(g,W,H);
+        cola.push(new Uint8Array(g.getImageData(0,0,W,H).data.buffer));bombear();n++;
+        const u=Math.min(1,n/total);$("expBar").style.width=(u*100).toFixed(1)+"%";if(window.__onExportProg)__onExportProg(u,n,total,fps);
+        $("expTxt").textContent="Creando video con "+(info.gpu?info.marca:"la CPU")+"… "+Math.round(u*100)+"%  ("+fmt(n/fps)+" de "+fmt(total/fps)+")";
+      },
+      async end(){
+        S.exporting=false;eng.soltar();
+        try{
+          if(ex.cancelled){await Nativo.cancelar();show(true,false,false);busy=false;return;}
+          while(bombeando||cola.length){bombear();await bombeando;if(err)break;}
+          if(err)throw err;
+          const bytes=await Nativo.terminar();
+          $("expVid").removeAttribute("src");$("expVid").hidden=true;
+          const dl=$("expDl");dl.textContent="📂 Mostrar en la carpeta";dl.removeAttribute("download");dl.href="#";dl.onclick=ev=>{ev.preventDefault();Nativo.mostrar(salida);};
+          $("expRes").textContent="¡Listo! "+W+"×"+H+" · "+fps+" cuadros/s · "+fmt(n/fps)+" · "+(bytes/1048576).toFixed(1)+" MB · "+(info.gpu?"codificado con la GPU: "+info.marca:"codificado con la CPU")+" ("+info.codificador+")"+(maestra?" · con copia maestra":"")+(audio?" · con voz":(noAudioMsg?" · "+noAudioMsg:""));
+          show(false,false,true);if(window.__onExportDone)__onExportDone(null,nm,$("expRes").textContent);
+          {const sb=$("expSrtBtn");if(sb){sb.hidden=!(window.Subs&&Subs.cues().length);sb.onclick=()=>Subs.downloadSrt();}}
+        }catch(e){
+          try{await Nativo.cancelar();}catch(_){}
+          $("expWarn").hidden=false;$("expWarn").textContent="No se pudo terminar el video: "+(e&&e.message||e);show(true,false,false);if(window.__onExportErr)__onExportErr(String(e&&e.message||e));
+        }
+        busy=false;
+      }};
+    busy=true;show(false,true,false);$("expBar").style.width="0";S.exporting=true;
+    if(!S.beginExport(ex)){S.exporting=false;busy=false;eng.soltar();Nativo.cancelar();show(true,false,false);}
+  }
   async function start(){
     const tier=+document.querySelector("input[name=expRes]:checked").value,dm=S.dim(),asp=dm.asp;
     /* el valor elegido (720, 1080…) es el lado corto del video, según el formato del lienzo */
     const W=asp>=1?Math.round(tier*asp/2)*2:tier,H=asp>=1?tier:Math.round(tier/asp/2)*2;
     const fps=+document.querySelector("input[name=expFps]:checked").value;
     const px=W*H,mb=(+(($("expMbpsC")||{}).value)||0)||+(($("expMbps")||{}).value)||0,bitrate=mb>0?Math.round(mb*1e6):Math.round((px>=7e6?50e6:px>=3.5e6?24e6:px>=1.9e6?14e6:8e6)*(fps>=50?1.5:1));
+    if(window.Nativo&&Nativo.activo&&Nativo.info&&Nativo.info.ffmpeg)return nativo(W,H,fps,mb);
+    const dl=$("expDl");dl.onclick=null;dl.textContent="⬇ Descargar MP4";
     const cfg=await pickConfig(W,H,fps,bitrate);
     if(!cfg){$("expWarn").hidden=false;$("expWarn").textContent="Tu equipo no pudo preparar el codificador de video. Prueba con 720p.";if(window.__onExportErr)__onExportErr("Tu equipo no pudo preparar el codificador de video.");return;}
     const total=Math.round(S.totalSeconds()*fps);
@@ -118,7 +178,7 @@ function init(){
   $("bExp").onclick=openDlg;
   $("expGo").onclick=()=>{start().catch(e=>{busy=false;show(true,false,false);$("expWarn").hidden=false;$("expWarn").textContent="Error: "+(e&&e.message||e);if(window.__onExportErr)__onExportErr(e&&e.message||String(e));});};
   $("expCancel").onclick=()=>S.cancelExport();
-  const close=()=>{if(busy)return;$("expVid").pause();$("exp").hidden=true;};
+  const close=()=>{if(busy)return;try{$("expVid").pause();}catch(e){}$("expVid").hidden=false;$("exp").hidden=true;};
   $("expClose").onclick=close;$("expClose2").onclick=close;
 }
 if(window.Studio)init();else document.addEventListener("studio-ready",init);

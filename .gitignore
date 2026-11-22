@@ -1,3 +1,7 @@
-node_modules/
+target/
+src-tauri/bin/*
+!src-tauri/bin/LEEME.txt
+src-tauri/gen/
 app/
+node_modules/
 instaladores/

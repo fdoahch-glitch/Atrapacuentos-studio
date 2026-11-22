@@ -1,0 +1,185 @@
+#![cfg_attr(all(not(debug_assertions), target_os = "windows"), windows_subsystem = "windows")]
+use atrapa_core::ffmpeg::{self, Codificador, Exportacion, Opciones};
+use atrapa_core::relieve::{self, Relieve};
+use atrapa_core::yuv;
+use serde::Serialize;
+use std::path::PathBuf;
+use std::sync::Mutex;
+use tauri::ipc::{InvokeBody, Request, Response};
+use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_dialog::DialogExt;
+
+#[derive(Default)]
+struct Estado {
+    export: Mutex<Option<Exportacion>>,
+    salida: Mutex<String>,
+    codificadores: Mutex<Option<Vec<Codificador>>>,
+    relieve: Mutex<Option<Relieve>>,
+    recursos: Mutex<Option<PathBuf>>,
+}
+
+type R<T> = Result<T, String>;
+fn e<T: std::fmt::Display>(x: T) -> String { x.to_string() }
+
+fn bin_dir(s: &Estado) -> Option<PathBuf> { s.recursos.lock().unwrap().clone().map(|p| p.join("bin")) }
+fn lib_ort(s: &Estado) -> PathBuf {
+    let n = if cfg!(windows) { "onnxruntime.dll" } else if cfg!(target_os = "macos") { "libonnxruntime.dylib" } else { "libonnxruntime.so" };
+    if let Ok(p) = std::env::var("ATRAPA_ORT_LIB") { return PathBuf::from(p); }
+    bin_dir(s).map(|b| b.join(n)).unwrap_or_else(|| PathBuf::from(n))
+}
+fn carpeta_datos(app: &AppHandle) -> PathBuf { app.path().app_data_dir().unwrap_or_else(|_| std::env::temp_dir().join("atrapacuentos")) }
+
+fn lista_codificadores(s: &Estado) -> Vec<Codificador> {
+    let mut g = s.codificadores.lock().unwrap();
+    if g.is_none() { *g = Some(ffmpeg::detectar()); }
+    g.clone().unwrap()
+}
+
+#[derive(Serialize)]
+struct Sistema { gpus: Vec<yuv::GpuInfo>, codificadores: Vec<Codificador>, ffmpeg: bool, relieve_listo: bool, sistema: String }
+
+#[tauri::command]
+async fn sistema(s: State<'_, Estado>, app: AppHandle) -> R<Sistema> {
+    let cod = lista_codificadores(&s);
+    let modelo = carpeta_datos(&app).join("modelos").join(relieve::MODELO_NOMBRE).exists();
+    Ok(Sistema { gpus: yuv::adaptadores(), ffmpeg: !cod.is_empty(), codificadores: cod, relieve_listo: modelo && lib_ort(&s).exists(), sistema: std::env::consts::OS.into() })
+}
+
+#[tauri::command]
+async fn elegir_guardar_video(app: AppHandle, nombre: String) -> R<Option<String>> {
+    let r = app.dialog().file().add_filter("Video MP4", &["mp4"]).set_file_name(format!("{nombre}.mp4")).set_title("Guardar video").blocking_save_file();
+    Ok(r.map(|p| p.to_string()))
+}
+
+#[tauri::command]
+async fn guardar_audio(request: Request<'_>) -> R<String> {
+    let InvokeBody::Raw(b) = request.body() else { return Err("falta el audio".into()) };
+    if b.len() < 8 { return Err("audio vacío".into()); }
+    let sr = u32::from_le_bytes(b[0..4].try_into().unwrap());
+    let ch = u32::from_le_bytes(b[4..8].try_into().unwrap()) as u16;
+    let muestras: Vec<f32> = b[8..].chunks_exact(4).map(|c| f32::from_le_bytes(c.try_into().unwrap())).collect();
+    let dir = std::env::temp_dir().join("atrapacuentos"); std::fs::create_dir_all(&dir).map_err(e)?;
+    let ruta = dir.join(format!("voz-{}.wav", std::process::id()));
+    ffmpeg::escribir_wav(&ruta, sr, ch, &muestras).map_err(e)?;
+    Ok(ruta.to_string_lossy().into())
+}
+
+#[derive(Serialize)]
+struct Inicio { codificador: String, marca: String, gpu: bool, tarjeta: String, bitrate: f32 }
+
+#[tauri::command]
+async fn exportar_iniciar(s: State<'_, Estado>, opciones: Opciones) -> R<Inicio> {
+    let lista = lista_codificadores(&s);
+    let ex = Exportacion::iniciar(&opciones, &lista).map_err(e)?;
+    let r = Inicio { codificador: ex.usado.id.clone(), marca: ex.usado.marca.clone(), gpu: ex.usado.gpu, tarjeta: ex.gpu_nombre.clone(),
+        bitrate: if opciones.mbps > 0.0 { opciones.mbps } else { ffmpeg::bitrate_auto(opciones.w, opciones.h, opciones.fps) } };
+    *s.export.lock().unwrap() = Some(ex);
+    *s.salida.lock().unwrap() = opciones.salida.clone();
+    Ok(r)
+}
+
+#[tauri::command]
+async fn exportar_cuadro(s: State<'_, Estado>, request: Request<'_>) -> R<u64> {
+    let InvokeBody::Raw(b) = request.body() else { return Err("falta el cuadro".into()) };
+    let mut g = s.export.lock().unwrap();
+    let ex = g.as_mut().ok_or("no hay exportación en curso")?;
+    if let Err(x) = ex.cuadro(b) { if let Some(ex) = g.take() { ex.cancelar(); } return Err(e(x)); }
+    Ok(ex.cuadros)
+}
+
+#[tauri::command]
+async fn exportar_terminar(s: State<'_, Estado>) -> R<u64> {
+    let ex = s.export.lock().unwrap().take().ok_or("no hay exportación en curso")?;
+    ex.terminar().map_err(e)?;
+    let ruta = s.salida.lock().unwrap().clone();
+    Ok(std::fs::metadata(ruta).map(|m| m.len()).unwrap_or(0))
+}
+#[tauri::command]
+async fn exportar_cancelar(s: State<'_, Estado>) -> R<()> { if let Some(ex) = s.export.lock().unwrap().take() { ex.cancelar(); } Ok(()) }
+
+#[tauri::command]
+async fn mostrar_en_carpeta(app: AppHandle, ruta: String) -> R<()> { tauri_plugin_opener::reveal_item_in_dir(PathBuf::from(&ruta)).map_err(e)?; let _ = app; Ok(()) }
+
+#[tauri::command]
+async fn guardar_proyecto(app: AppHandle, texto: String, nombre: String) -> R<Option<String>> {
+    let Some(p) = app.dialog().file().add_filter("Proyecto Atrapacuentos", &["atrapacuentos"]).set_file_name(format!("{nombre}.atrapacuentos")).set_title("Guardar proyecto").blocking_save_file() else { return Ok(None) };
+    let ruta = p.into_path().map_err(e)?;
+    std::fs::write(&ruta, texto).map_err(e)?;
+    Ok(Some(ruta.to_string_lossy().into()))
+}
+#[tauri::command]
+async fn abrir_proyecto(app: AppHandle) -> R<Option<String>> {
+    let Some(p) = app.dialog().file().add_filter("Proyecto Atrapacuentos", &["atrapacuentos", "json", "txt"]).set_title("Abrir proyecto").blocking_pick_file() else { return Ok(None) };
+    let ruta = p.into_path().map_err(e)?;
+    Ok(Some(std::fs::read_to_string(ruta).map_err(e)?))
+}
+
+#[tauri::command]
+async fn relieve_modelo_archivo(app: AppHandle) -> R<bool> {
+    let Some(p) = app.dialog().file().add_filter("Modelo ONNX", &["onnx"]).set_title("Elige el modelo de relieve (.onnx)").blocking_pick_file() else { return Ok(false) };
+    let dir = carpeta_datos(&app).join("modelos"); std::fs::create_dir_all(&dir).map_err(e)?;
+    std::fs::copy(p.into_path().map_err(e)?, dir.join(relieve::MODELO_NOMBRE)).map_err(e)?;
+    Ok(true)
+}
+
+/// Entrada: [ancho u32][alto u32][RGBA]. Salida: [ancho u32][alto u32][gpu u8][grises]
+#[tauri::command]
+async fn relieve_estimar(s: State<'_, Estado>, app: AppHandle, request: Request<'_>) -> R<Response> {
+    let InvokeBody::Raw(b) = request.body() else { return Err("falta la imagen".into()) };
+    if b.len() < 8 { return Err("imagen vacía".into()); }
+    let w = u32::from_le_bytes(b[0..4].try_into().unwrap()) as usize;
+    let h = u32::from_le_bytes(b[4..8].try_into().unwrap()) as usize;
+    let rgba = &b[8..];
+    let lib = lib_ort(&s);
+    if !lib.exists() { return Err(format!("Falta ONNX Runtime ({})", lib.display())); }
+    let dir = carpeta_datos(&app).join("modelos");
+    let ap = app.clone();
+    let modelo = relieve::asegurar_modelo(&dir, move |n, t| { let _ = ap.emit("relieve-progreso", serde_json::json!({"n": n, "total": t})); }).map_err(e)?;
+    let mut g = s.relieve.lock().unwrap();
+    if g.is_none() { *g = Some(Relieve::cargar(&modelo, &lib).map_err(e)?); }
+    let r = g.as_mut().unwrap();
+    let (mapa, dw, dh) = r.estimar(rgba, w, h).map_err(e)?;
+    let mut o = Vec::with_capacity(9 + mapa.len());
+    o.extend((dw as u32).to_le_bytes()); o.extend((dh as u32).to_le_bytes()); o.push(r.gpu as u8); o.extend(mapa);
+    Ok(Response::new(o))
+}
+
+fn main() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
+        .manage(Estado::default())
+        .setup(|app| {
+            let est: State<Estado> = app.state();
+            if let Ok(rd) = app.path().resource_dir() {
+                *est.recursos.lock().unwrap() = Some(rd.clone());
+                let bin = rd.join("bin");
+                let ff = bin.join(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" });
+                if ff.exists() && std::env::var("ATRAPA_FFMPEG").is_err() { std::env::set_var("ATRAPA_FFMPEG", &ff); }
+                // para que Windows encuentre DirectML.dll junto a onnxruntime.dll
+                let sep = if cfg!(windows) { ";" } else { ":" };
+                let path = std::env::var("PATH").unwrap_or_default();
+                std::env::set_var("PATH", format!("{}{}{}", bin.display(), sep, path));
+            }
+            let abrir = MenuItemBuilder::with_id("abrir", "Abrir proyecto…").accelerator("CmdOrCtrl+O").build(app)?;
+            let guardar = MenuItemBuilder::with_id("guardar", "Guardar proyecto…").accelerator("CmdOrCtrl+S").build(app)?;
+            let equipo = MenuItemBuilder::with_id("equipo", "Revisar mi equipo (GPU y codificadores)").build(app)?;
+            let archivo = SubmenuBuilder::new(app, "Archivo").item(&abrir).item(&guardar).separator().item(&equipo).separator().quit().build()?;
+            let editar = SubmenuBuilder::new(app, "Editar").undo().redo().separator().cut().copy().paste().select_all().build()?;
+            let ver = SubmenuBuilder::new(app, "Ver").fullscreen().build()?;
+            app.set_menu(MenuBuilder::new(app).items(&[&archivo, &editar, &ver]).build()?)?;
+            app.on_menu_event(|app, ev| { let _ = app.emit("menu", ev.id().0.clone()); });
+            #[cfg(target_os = "linux")]
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.with_webview(|wv| {
+                    use webkit2gtk::{SettingsExt, WebViewExt};
+                    if let Some(s) = wv.inner().settings() { s.set_enable_media_stream(true); s.set_enable_webgl(true); s.set_enable_mediasource(true); s.set_hardware_acceleration_policy(webkit2gtk::HardwareAccelerationPolicy::Always); }
+                });
+            }
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![sistema, elegir_guardar_video, guardar_audio, exportar_iniciar, exportar_cuadro, exportar_terminar, exportar_cancelar, mostrar_en_carpeta, guardar_proyecto, abrir_proyecto, relieve_modelo_archivo, relieve_estimar])
+        .run(tauri::generate_context!())
+        .expect("no se pudo abrir Atrapacuentos Studio");
+}

@@ -1,0 +1,1 @@
+Aquí van ffmpeg y onnxruntime (los baja el script scripts/bajar-binarios.sh/.ps1 o la compilación automática).

@@ -122,11 +122,43 @@ function actsAt(it,t,sc){const o=[];for(const a of it.acc||[]){const pose=a.k&&a
   o.push({k:pose?"pose":a.k,pose,u,tt:t-a.t0,tgt,w:a.w,fe:a.ent!=null?a.ent/d:undefined,fs:a.sal!=null?a.sal/d:undefined});}}
   if(it._poseEdit)o.push({k:"pose",pose:it._poseEdit,u:.5,tt:0,full:1});return o;}
 function setKf(it,t,v){t=Math.round(t*20)/20;it.kf=it.kf||[];let f=it.kf.find(k=>Math.abs(k.t-t)<.04);if(!f){f={t};it.kf.push(f);}Object.assign(f,v);it.kf.sort((a,b)=>a.t-b.t);}
-function drawBg(g,sc,cam,sx){
+/* 🏔 Relieve: la imagen se corta en capas según su mapa de profundidad y cada capa se mueve distinto (paralaje) */
+const NCAP=6;
+function capasDe(id){
+  const o=IMG[id],pr=proj.imgs[id];if(!o||!o.ok||!pr||!pr.depth)return null;
+  if(o.capas&&o.capas.src===pr.depth)return o.capas.l;
+  if(!o.dep||o.dep.src!==pr.depth){const d=new Image();d.onload=()=>{o.capas=null;draw();};d.src=pr.depth;o.dep=d;return null;}
+  if(!o.dep.complete||!o.dep.naturalWidth)return null;
+  const im=o.img,k=Math.min(1,1024/Math.max(im.naturalWidth,im.naturalHeight)),W=Math.max(2,Math.round(im.naturalWidth*k)),H=Math.max(2,Math.round(im.naturalHeight*k));
+  const c=document.createElement("canvas");c.width=W;c.height=H;const g=c.getContext("2d",{willReadFrequently:true});
+  g.drawImage(im,0,0,W,H);const px=g.getImageData(0,0,W,H).data;
+  g.clearRect(0,0,W,H);g.drawImage(o.dep,0,0,W,H);const dp=g.getImageData(0,0,W,H).data,L=[],soft=.6/NCAP;
+  for(let n=0;n<NCAP;n++){
+    const out=new ImageData(W,H),od=out.data,th=n/NCAP;
+    for(let i=0,p=0;i<W*H;i++,p+=4){const m=n===0?1:Math.min(1,Math.max(0,(dp[p]/255-(th-soft/2))/soft));od[p]=px[p];od[p+1]=px[p+1];od[p+2]=px[p+2];od[p+3]=px[p+3]*m;}
+    const cv=document.createElement("canvas");cv.width=W;cv.height=H;cv.getContext("2d").putImageData(out,0,0);L.push(cv);
+  }
+  o.capas={src:pr.depth,l:L};return L;
+}
+/* cuánto se separan las capas: vaivén suave y/o siguiendo a la cámara */
+function relOff(rel,t,cam,w){
+  const a=(rel.fuerza==null?50:rel.fuerza)/100*.05*w,an=rel.anim||"vaiven";let x=0,y=0;
+  if(an==="vaiven"||an==="ambos"){x+=Math.sin(TAU*t/6)*a;y+=Math.cos(TAU*t/6)*a*.35;}
+  if(an==="camara"||an==="ambos")x+=-(cam.x||0)/UW()*a*5;
+  return{x,y};
+}
+function drawRelieve(g,L,x,y,w,h,rel,t,cam){
+  const f=relOff(rel,t,cam,w),sc=1+2.2*(Math.abs(f.x)/w+Math.abs(f.y)/h);
+  g.save();g.translate(x+w/2,y+h/2);g.scale(sc,sc);g.translate(-w/2,-h/2);
+  for(let n=0;n<L.length;n++){const q=(n/(L.length-1)-.5)*2;g.drawImage(L[n],f.x*q,f.y*q,w,h);}
+  g.restore();
+}
+function drawBg(g,sc,cam,sx,t){
   const W=g.canvas.width,H=g.canvas.height;
   if(sc.fondo&&sc.fondo.img){const o=IMG[sc.fondo.img];g.fillStyle="#222";g.fillRect(0,0,W,H);
     if(o&&o.ok){const im=o.img,cx=UW()/2,k=Math.max(UW()/im.width,UH()/im.height)*1.2,w=im.width*k,h=im.height*k;g.save();g.translate(cx*sx,360*sx);g.scale(cam.z,cam.z);g.translate(-cx*sx,-360*sx);
-      g.drawImage(im,(cx-w/2-cam.x*.3)*sx,(360-h/2)*sx,w*sx,h*sx);g.restore();}
+      const L=sc.fondo.rel?capasDe(sc.fondo.img):null;
+      if(L)drawRelieve(g,L,(cx-w/2-cam.x*.3)*sx,(360-h/2)*sx,w*sx,h*sx,sc.fondo.rel,t||0,cam);else g.drawImage(im,(cx-w/2-cam.x*.3)*sx,(360-h/2)*sx,w*sx,h*sx);g.restore();}
     return;}
   if(sc.fondo&&sc.fondo.id==="blanco"){g.fillStyle=sc.fondo.color||"#ffffff";g.fillRect(0,0,W,H);return;}
   const bg=BGS[sc.fondo&&sc.fondo.id]||A.BG[0];A.dibujarFondo(g,bg,sx,sx,cam.z,sx,cam,undefined,UW());
@@ -193,7 +225,7 @@ function drawItemIn(g,sc,it,t,cam,sx,opt){
     bb={x:X+dx*sx*z-ww*.5,y:sp.anc==="b"?Y+dy*sx*z-hh:sp.anc==="t"?Y+dy*sx*z:Y+dy*sx*z-hh/2,w:ww,h:hh};
   }else if(it.kind==="img"){
     const o=IMG[it.ref];if(!o||!o.ok)return;const pr=proj.imgs[it.ref]||{};let im=o.img;if(o.fr&&o.fr.length){const f=o.fr[Math.floor(t*(pr.fps||8))%o.fr.length];if(f&&f.complete&&f.naturalWidth)im=f;}const hh=(it.h0||300)*k,ww=hh*im.width/im.height;
-    const rot=it.mov==="mecer"?.03*Math.sin(TAU*.4*t):0;g.translate(X,Y);if(rot+P.r)g.rotate(rot+P.r);g.drawImage(im,-ww/2,-hh,ww,hh);bb={x:X-ww/2,y:Y-hh,w:ww,h:hh};
+    const rot=it.mov==="mecer"?.03*Math.sin(TAU*.4*t):0;g.translate(X,Y);if(rot+P.r)g.rotate(rot+P.r);{const L=it.rel&&!(o.fr&&o.fr.length)?capasDe(it.ref):null;if(L)drawRelieve(g,L,-ww/2,-hh,ww,hh,it.rel,t,cam);else g.drawImage(im,-ww/2,-hh,ww,hh);}bb={x:X-ww/2,y:Y-hh,w:ww,h:hh};
   }
   if(bb)it._bb={x:bb.x/sx,y:bb.y/sx,w:bb.w/sx,h:bb.h/sx,X:X/sx,Y:Y/sx};
 }
@@ -211,7 +243,7 @@ function bgCamAt(sc,cam,t){
 function frame(g,sc,t,opt){
   const W=g.canvas.width,sx=W/UW();g.clearRect(0,0,W,g.canvas.height);
   const cam=camAt(sc,t);
-  drawBg(g,sc,bgCamAt(sc,cam,t),sx);
+  drawBg(g,sc,bgCamAt(sc,cam,t),sx,t);
   const L=sc.items.map((it,i)=>[it,i]).sort((a,b)=>((a[0].d==null?60:a[0].d)-(b[0].d==null?60:b[0].d))||a[1]-b[1]);
   for(const [it] of L)drawItem(g,sc,it,t,cam,sx,opt);
   if(sc.hora==="tarde"||sc.hora==="noche"){g.save();g.globalCompositeOperation="multiply";const gr=g.createLinearGradient(0,0,0,g.canvas.height);
@@ -354,6 +386,7 @@ function itemPanel(P,it){
       ${row("Peinado",`<select id="pPe">${[["corto","Corto"],["largo","Largo"],["coletas","Coletas"],["calvo","Sin pelo"]].map(([v,l])=>`<option value="${v}" ${pal.pelo_estilo===v?"selected":""}>${l}</option>`).join("")}</select>`)}
       ${row("Sombrero",`<input id="pGo" type="checkbox" ${pal.gorro?"checked":""}><input type="color" id="pGoC" value="${pal.gorro||"#d9b878"}">`)}</div>`;}
   }
+  if(it.kind==="img"&&window.Relieve)h+=Relieve.card(it,it.ref);
   h+=`<div class="card"><h4>✨ Animar entrada y salida</h4><div class="sub" style="font-size:11px;opacity:.7;margin-bottom:4px">Hace que aparezca y se vaya con animación. Funciona con personajes, decoración e imágenes.</div>
    ${row("Entra",`<select id="eN">${[["","Ya está en escena"],["aparecer","Aparecer (fundido)"],["subir","Subir"],["caer","Caer con rebote"],["zoom","Crecer"],["rebote","Rebotar al aparecer"],["izq","Entrar por la izquierda"],["der","Entrar por la derecha"]].map(([v,l])=>`<option value="${v}" ${(it.ent||"")===v?"selected":""}>${l}</option>`).join("")}</select>`)}
    ${it.ent?row("Entra en (s)",`<input id="eNt" type="number" min="0" step=".5" value="${it.ent_t||0}" style="width:70px"> dura <input id="eNd" type="number" min=".2" step=".1" value="${it.ent_d||.8}" style="width:60px">`):""}
@@ -393,6 +426,7 @@ function itemPanel(P,it){
   bind(P,"#fiK","onchange",e=>{if(!e.target.value)delete it.fis;else it.fis=Object.assign({t0:0,suelo:Math.max(it.y+150,650),vx:0,e:.5},it.fis||{},{k:e.target.value});ch();renderProps();draw();});
   for(const [id,k,fn] of [["#fiT","t0",v=>+v||0],["#fiS","suelo",v=>+v||650]])bind(P,id,"onchange",e=>{it.fis[k]=fn(e.target.value);ch();draw();});
   {const v=bind(P,"#fiV","oninput",e=>{it.fis.vx=+e.target.value;draw();});if(v)v.onchange=ch;const q=bind(P,"#fiE","oninput",e=>{it.fis.e=e.target.value/100;draw();});if(q)q.onchange=ch;}
+  if(it.kind==="img"&&window.Relieve)Relieve.bind(P,it,it.ref,()=>{ch();renderProps();draw();});
   bind(P,"#eN","onchange",e=>{if(e.target.value)it.ent=e.target.value;else delete it.ent;ch();renderProps();draw();});
   bind(P,"#eS","onchange",e=>{if(e.target.value){it.sal=e.target.value;if(!(it.sal_t>0))it.sal_t=Math.max(1,(curScene().dur||6)-1);}else delete it.sal;ch();renderProps();draw();});
   for(const [id,k,fn] of [["#eNt","ent_t",v=>Math.max(0,+v||0)],["#eNd","ent_d",v=>Math.max(.2,+v||.8)],["#eSt","sal_t",v=>Math.max(0,+v||0)],["#eSd","sal_d",v=>Math.max(.2,+v||.8)]])bind(P,id,"onchange",e=>{it[k]=fn(e.target.value);ch();draw();});
@@ -420,6 +454,7 @@ function scenePanel(P){
    ${row("Dura (s)",`<input id="sDur" type="number" min="2" max="300" step="1" value="${sc.dur}" style="width:80px">`)}
    ${row("Fondo",`<span style="flex:1;opacity:.85">${esc(bgn)}</span><button id="sBg">Cambiar</button>`)}${sc.fondo&&sc.fondo.id==="blanco"?row("Color del fondo",`<input id="sBgC" type="color" value="${sc.fondo.color||"#ffffff"}">`):""}
    ${row("Momento",`<select id="sHo">${[["","☀️ Día"],["tarde","🌇 Atardecer"],["noche","🌙 Noche"]].map(([v,l])=>`<option value="${v}" ${(sc.hora||"")===v?"selected":""}>${l}</option>`).join("")}</select>`)}</div>
+  ${sc.fondo&&sc.fondo.img&&window.Relieve?Relieve.card(sc.fondo,sc.fondo.img):""}
   <div class="card"><h4>🌄 Animar el fondo</h4>${row("Movimiento",`<select id="sBm">${[["","Quieto"],["deriva","Deriva (se desplaza despacio)"],["vaiven","Vaivén suave"],["respirar","Respirar (zoom suave)"],["acercar","Acercarse"],["alejar","Alejarse"]].map(([v,l])=>`<option value="${v}" ${((sc.fondo&&sc.fondo.mov)||"")===v?"selected":""}>${l}</option>`).join("")}</select>`)}
    ${sc.fondo&&sc.fondo.mov?row("Velocidad",`<input id="sBv" type="range" min="10" max="150" value="${sc.fondo.vel==null?50:sc.fondo.vel}">`):""}</div>
   <div class="card"><h4>📷 Cámara</h4><div class="btns" style="margin-bottom:6px"><button data-cp="fija">Fija</button><button data-cp="acercar">Acercar</button><button data-cp="alejar">Alejar</button><button data-cp="der">Pasea →</button><button data-cp="izq">← Pasea</button></div>
@@ -443,6 +478,7 @@ function scenePanel(P){
   <div class="card"><h4>🎞 Escenas</h4><div class="btns"><button id="sDup">⧉ Duplicar</button><button id="sL">◀ Antes</button><button id="sR">Después ▶</button><button id="sDel" class="danger">🗑</button></div></div>`;
   const ch=()=>changed();
   bind(P,"#sNom","onchange",e=>{sc.nombre=e.target.value||"Escena";ch();renderTl();});bind(P,"#sDur","onchange",e=>{sc.dur=clamp(+e.target.value||10,2,300);ch();renderTl();syncScrub();if(sc.amb)ambiente(sc,sc.amb.k,sc.amb.v);});
+  if(sc.fondo&&sc.fondo.img&&window.Relieve)Relieve.bind(P,sc.fondo,sc.fondo.img,()=>{ch();renderProps();draw();});
   bind(P,"#sBm","onchange",e=>{sc.fondo=sc.fondo||{id:"pradera"};if(e.target.value)sc.fondo.mov=e.target.value;else delete sc.fondo.mov;ch();renderProps();draw();});
   {const v=bind(P,"#sBv","oninput",e=>{sc.fondo.vel=+e.target.value;draw();});if(v)v.onchange=ch;}
   bind(P,"#sBg","onclick",()=>{rail="fon";renderLib();});{const cb=bind(P,"#sBgC","oninput",e=>{sc.fondo.color=e.target.value;draw();});if(cb)cb.onchange=()=>{ch();renderTl();};}bind(P,"#sHo","onchange",e=>{sc.hora=e.target.value;ch();});
