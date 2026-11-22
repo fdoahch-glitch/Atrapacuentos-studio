@@ -21,7 +21,7 @@ function newScene(nombre,fondo){return {nombre:nombre||"Escena",dur:10,fondo:fon
 /* Lienzo: la altura de la escena siempre mide 720 unidades; el ancho depende del formato. */
 const FMT={"16:9":{n:"Horizontal 16:9 (YouTube)",w:1280,h:720},"9:16":{n:"Vertical 9:16 (Shorts, Reels, TikTok)",w:405,h:720},"1:1":{n:"Cuadrado 1:1 (Instagram)",w:720,h:720}};
 const BASES=[[720,"720p (HD)"],[1080,"1080p (Full HD)"],[1440,"1440p (2K)"],[2160,"2160p (4K)"]];
-function lienzoDe(p){const l=Object.assign({fmt:"16:9",base:1080,fps:30},(p&&p.lienzo)||{});if(!FMT[l.fmt])l.fmt="16:9";return l;}
+function lienzoDe(p){const l=Object.assign({fmt:"16:9",base:1080,fps:30,mbps:0},(p&&p.lienzo)||{});if(!FMT[l.fmt])l.fmt="16:9";return l;}
 function UW(){return FMT[lienzoDe(proj).fmt].w;}
 function UH(){return FMT[lienzoDe(proj).fmt].h;}
 function dim(){return {w:UW(),h:UH(),asp:UW()/UH(),lienzo:lienzoDe(proj)};}
@@ -133,8 +133,23 @@ function drawBg(g,sc,cam,sx){
 }
 function drawItem(g,sc,it,t,cam,sx,opt){g.save();try{drawItemIn(g,sc,it,t,cam,sx,opt);}finally{g.restore();}}
 const SIL={},mkc=(w,h)=>{const c=document.createElement("canvas");c.width=w;c.height=h;return c;};
+/* ✨ entrada y salida de cualquier elemento (personaje, decoración, imagen): aparece y se va con animación */
+const eo=u=>1-Math.pow(1-u,3),eb=u=>{const c=1.70158;return 1+(c+1)*Math.pow(u-1,3)+c*Math.pow(u-1,2);};
+function entSal(it,t,P){
+  if(!it.ent&&!it.sal)return P;const Q=Object.assign({},P);let a=1;
+  if(it.ent){const t0=it.ent_t||0,d=Math.max(.15,it.ent_d||.8);
+    if(t<t0)a=0;else if(t<t0+d){const u=(t-t0)/d,e=eo(u);
+      switch(it.ent){case"aparecer":a=e;break;case"subir":a=e;Q.y+=(1-e)*160;break;case"caer":a=Math.min(1,u*3);Q.y-=(1-eb(u))*420;break;
+        case"zoom":a=e;Q.s=(Q.s||1)*(.15+.85*e);break;case"rebote":a=Math.min(1,u*4);Q.s=(Q.s||1)*Math.max(0,eb(u));break;
+        case"izq":a=e;Q.x-=(1-e)*520;break;case"der":a=e;Q.x+=(1-e)*520;break;}}}
+  if(it.sal&&it.sal_t>0){const t0=it.sal_t,d=Math.max(.15,it.sal_d||.8);
+    if(t>=t0+d)a=0;else if(t>=t0){const u=(t-t0)/d,e=u*u;
+      switch(it.sal){case"aparecer":a*=1-u;break;case"bajar":a*=1-u;Q.y+=e*160;break;case"zoom":a*=1-u;Q.s=(Q.s||1)*(1-.85*e);break;
+        case"izq":a*=1-e;Q.x-=e*520;break;case"der":a*=1-e;Q.x+=e*520;break;case"subir":a*=1-u;Q.y-=e*220;break;}}}
+  Q.op=(Q.op==null?1:Q.op)*a;return Q;
+}
 function drawItemIn(g,sc,it,t,cam,sx,opt){
-  const P=itemPos(it,t),pf=pfOf(it.d),z=cam.z;
+  const P=entSal(it,t,itemPos(it,t)),pf=pfOf(it.d),z=cam.z;
   const cx0=UW()/2,X=((P.x-cam.x*pf-cx0)*z+cx0)*sx,Y=((P.y-cam.y*pf*.5-360)*z+360)*sx,k=(P.s||1)*z*sx;
   let bb=null;
   if(P.op<1)g.globalAlpha=Math.max(0,P.op);
@@ -182,10 +197,21 @@ function drawItemIn(g,sc,it,t,cam,sx,opt){
   }
   if(bb)it._bb={x:bb.x/sx,y:bb.y/sx,w:bb.w/sx,h:bb.h/sx,X:X/sx,Y:Y/sx};
 }
+/* 🌄 el fondo también se puede animar: se desplaza, va y viene, respira o se acerca despacio */
+function bgCamAt(sc,cam,t){
+  const f=sc.fondo||{},m=f.mov;if(!m)return cam;const v=(f.vel==null?50:f.vel)/50,c=Object.assign({},cam),d=Math.max(1,sc.dur||6);
+  const tri=x=>{const u=((x%2)+2)%2;return u<1?u*2-1:3-u*2;};          /* onda triangular: va y vuelve sin saltos */
+  if(m==="deriva")c.x=cam.x+160*v*tri(t/18);
+  else if(m==="vaiven")c.x=cam.x+110*v*Math.sin(TAU*t/12);
+  else if(m==="respirar")c.z=cam.z*(1+.05*v*Math.sin(TAU*t/9));
+  else if(m==="acercar")c.z=cam.z*(1+.14*v*Math.min(1,t/d));
+  else if(m==="alejar")c.z=cam.z*(1+.14*v*(1-Math.min(1,t/d)));
+  return c;
+}
 function frame(g,sc,t,opt){
   const W=g.canvas.width,sx=W/UW();g.clearRect(0,0,W,g.canvas.height);
   const cam=camAt(sc,t);
-  drawBg(g,sc,cam,sx);
+  drawBg(g,sc,bgCamAt(sc,cam,t),sx);
   const L=sc.items.map((it,i)=>[it,i]).sort((a,b)=>((a[0].d==null?60:a[0].d)-(b[0].d==null?60:b[0].d))||a[1]-b[1]);
   for(const [it] of L)drawItem(g,sc,it,t,cam,sx,opt);
   if(sc.hora==="tarde"||sc.hora==="noche"){g.save();g.globalCompositeOperation="multiply";const gr=g.createLinearGradient(0,0,0,g.canvas.height);
@@ -262,7 +288,7 @@ function renderLib(){
     for(const sp of A.SP){if(q?!sp.n.toLowerCase().includes(q):sp.cat!==decCat)continue;g.appendChild(tile(thumbOf(sp),sp.n,()=>addDeco(sp.id),"dec:"+sp.id));}
     const mis=Object.entries(proj.imgs).filter(([,o])=>o.tipo==="elemento");if(mis.length&&!q){sec("Mis elementos");const g2=grid();for(const [id,o] of mis){const im=new Image();im.src=o.url;g2.appendChild(tile(im,o.n,()=>addImg(id),"img:"+id));}}
   }else if(rail==="img"){title.textContent="Mis imágenes";
-    sec("Subir");let g=grid();g.appendChild(up("Fondo",()=>subirImg("fondo")));g.appendChild(up("Elemento con fondo transparente (PNG)",()=>subirImg("elemento")));g.appendChild(up("Dibujo SVG o PSD de Photoshop",()=>window.Importar&&Importar.abrir()));
+    sec("Subir");let g=grid();g.appendChild(up("Fondo",()=>subirImg("fondo")));g.appendChild(up("Elemento con fondo transparente (PNG)",()=>subirImg("elemento")));g.appendChild(up("Dibujo SVG o PSD de Photoshop",()=>window.Importar&&Importar.abrir()));g.appendChild(up("📦 Paquete de imágenes (.zip)",()=>window.Paquetes&&Paquetes.abrir()));
     const all=Object.entries(proj.imgs);if(all.length){sec("Subidas");g=grid();for(const [id,o] of all){const im=new Image();im.src=o.url;g.appendChild(tile(im,o.n+" · "+o.tipo,()=>o.tipo==="fondo"?(curScene().fondo={img:id},changed()):addImg(id),"img:"+id));}}
     body.insertAdjacentHTML("beforeend",`<p style="opacity:.65;font-size:12px;margin-top:12px">Los elementos se pueden mover, agrandar, ponerlos cerca o lejos y hasta mecerlos con el viento. Para que un personaje mueva la boca y las patas, usa el <b>✂️ Taller</b>.</p>`);
   }else if(rail==="dib"){title.textContent="Dibujo cuadro a cuadro";body.innerHTML="";
@@ -328,6 +354,11 @@ function itemPanel(P,it){
       ${row("Peinado",`<select id="pPe">${[["corto","Corto"],["largo","Largo"],["coletas","Coletas"],["calvo","Sin pelo"]].map(([v,l])=>`<option value="${v}" ${pal.pelo_estilo===v?"selected":""}>${l}</option>`).join("")}</select>`)}
       ${row("Sombrero",`<input id="pGo" type="checkbox" ${pal.gorro?"checked":""}><input type="color" id="pGoC" value="${pal.gorro||"#d9b878"}">`)}</div>`;}
   }
+  h+=`<div class="card"><h4>✨ Animar entrada y salida</h4><div class="sub" style="font-size:11px;opacity:.7;margin-bottom:4px">Hace que aparezca y se vaya con animación. Funciona con personajes, decoración e imágenes.</div>
+   ${row("Entra",`<select id="eN">${[["","Ya está en escena"],["aparecer","Aparecer (fundido)"],["subir","Subir"],["caer","Caer con rebote"],["zoom","Crecer"],["rebote","Rebotar al aparecer"],["izq","Entrar por la izquierda"],["der","Entrar por la derecha"]].map(([v,l])=>`<option value="${v}" ${(it.ent||"")===v?"selected":""}>${l}</option>`).join("")}</select>`)}
+   ${it.ent?row("Entra en (s)",`<input id="eNt" type="number" min="0" step=".5" value="${it.ent_t||0}" style="width:70px"> dura <input id="eNd" type="number" min=".2" step=".1" value="${it.ent_d||.8}" style="width:60px">`):""}
+   ${row("Sale",`<select id="eS">${[["","No sale"],["aparecer","Desaparecer (fundido)"],["bajar","Bajar"],["subir","Subir"],["zoom","Achicarse"],["izq","Salir por la izquierda"],["der","Salir por la derecha"]].map(([v,l])=>`<option value="${v}" ${(it.sal||"")===v?"selected":""}>${l}</option>`).join("")}</select>`)}
+   ${it.sal?row("Sale en (s)",`<input id="eSt" type="number" min="0" step=".5" value="${it.sal_t||Math.max(1,(curScene().dur||6)-1)}" style="width:70px"> dura <input id="eSd" type="number" min=".2" step=".1" value="${it.sal_d||.8}" style="width:60px">`):""}</div>`;
   if(it.kind==="deco"||it.kind==="img"){h+=`<div class="card"><h4>🌬 Movimiento</h4>${row("Se mueve",`<select id="pMv">${[["","Quieto"],["mecer","Mecerse con el viento"],["flotar","Flotar"],["girar","Girar"],["pulso","Latir"],["volar","Volar suave"],["aletear","Aletear y revolotear"],["parpadear","Parpadear (fuego)"]].map(([v,l])=>`<option value="${v}" ${(it.mov||"")===v?"selected":""}>${l}</option>`).join("")}</select>`)}</div>`;}
   {const f=it.fis||{};h+=`<div class="card"><h4>⚙ Física</h4>${row("Qué hace",`<select id="fiK"><option value="">Nada</option><option value="rebota" ${f.k==="rebota"?"selected":""}>Cae y rebota</option><option value="rueda" ${f.k==="rueda"?"selected":""}>Rueda por el suelo</option></select>`)}
    ${it.fis?`${row("Empieza (s)",`<input id="fiT" type="number" step=".5" min="0" value="${f.t0||0}" style="width:70px">`)}${row("Suelo (altura)",`<input id="fiS" type="number" step="10" value="${f.suelo||650}" style="width:80px">`)}${row("Empujón →",`<input id="fiV" type="range" min="-600" max="600" value="${f.vx||0}">`)}${f.k==="rebota"?row("Rebote",`<input id="fiE" type="range" min="0" max="90" value="${Math.round((f.e==null?.5:f.e)*100)}">`):""}`:`<div class="sub" style="font-size:11px;opacity:.7">Coloca el objeto en lo alto y elige «Cae y rebota».</div>`}</div>`;}
@@ -362,6 +393,9 @@ function itemPanel(P,it){
   bind(P,"#fiK","onchange",e=>{if(!e.target.value)delete it.fis;else it.fis=Object.assign({t0:0,suelo:Math.max(it.y+150,650),vx:0,e:.5},it.fis||{},{k:e.target.value});ch();renderProps();draw();});
   for(const [id,k,fn] of [["#fiT","t0",v=>+v||0],["#fiS","suelo",v=>+v||650]])bind(P,id,"onchange",e=>{it.fis[k]=fn(e.target.value);ch();draw();});
   {const v=bind(P,"#fiV","oninput",e=>{it.fis.vx=+e.target.value;draw();});if(v)v.onchange=ch;const q=bind(P,"#fiE","oninput",e=>{it.fis.e=e.target.value/100;draw();});if(q)q.onchange=ch;}
+  bind(P,"#eN","onchange",e=>{if(e.target.value)it.ent=e.target.value;else delete it.ent;ch();renderProps();draw();});
+  bind(P,"#eS","onchange",e=>{if(e.target.value){it.sal=e.target.value;if(!(it.sal_t>0))it.sal_t=Math.max(1,(curScene().dur||6)-1);}else delete it.sal;ch();renderProps();draw();});
+  for(const [id,k,fn] of [["#eNt","ent_t",v=>Math.max(0,+v||0)],["#eNd","ent_d",v=>Math.max(.2,+v||.8)],["#eSt","sal_t",v=>Math.max(0,+v||0)],["#eSd","sal_d",v=>Math.max(.2,+v||.8)]])bind(P,id,"onchange",e=>{it[k]=fn(e.target.value);ch();draw();});
   bind(P,"#pMv","onchange",e=>{it.mov=e.target.value;ch();});
   bind(P,"#pDup","onclick",()=>{const c=JSON.parse(JSON.stringify(it,strip));c.uid=uid();c.x+=40;c.y+=10;curScene().items.push(c);sel=c.uid;ch();renderProps();});
   bind(P,"#pDel","onclick",delItem);void def;
@@ -386,6 +420,8 @@ function scenePanel(P){
    ${row("Dura (s)",`<input id="sDur" type="number" min="2" max="300" step="1" value="${sc.dur}" style="width:80px">`)}
    ${row("Fondo",`<span style="flex:1;opacity:.85">${esc(bgn)}</span><button id="sBg">Cambiar</button>`)}${sc.fondo&&sc.fondo.id==="blanco"?row("Color del fondo",`<input id="sBgC" type="color" value="${sc.fondo.color||"#ffffff"}">`):""}
    ${row("Momento",`<select id="sHo">${[["","☀️ Día"],["tarde","🌇 Atardecer"],["noche","🌙 Noche"]].map(([v,l])=>`<option value="${v}" ${(sc.hora||"")===v?"selected":""}>${l}</option>`).join("")}</select>`)}</div>
+  <div class="card"><h4>🌄 Animar el fondo</h4>${row("Movimiento",`<select id="sBm">${[["","Quieto"],["deriva","Deriva (se desplaza despacio)"],["vaiven","Vaivén suave"],["respirar","Respirar (zoom suave)"],["acercar","Acercarse"],["alejar","Alejarse"]].map(([v,l])=>`<option value="${v}" ${((sc.fondo&&sc.fondo.mov)||"")===v?"selected":""}>${l}</option>`).join("")}</select>`)}
+   ${sc.fondo&&sc.fondo.mov?row("Velocidad",`<input id="sBv" type="range" min="10" max="150" value="${sc.fondo.vel==null?50:sc.fondo.vel}">`):""}</div>
   <div class="card"><h4>📷 Cámara</h4><div class="btns" style="margin-bottom:6px"><button data-cp="fija">Fija</button><button data-cp="acercar">Acercar</button><button data-cp="alejar">Alejar</button><button data-cp="der">Pasea →</button><button data-cp="izq">← Pasea</button></div>
    ${row("Zoom inicio",`<input id="cZ0" type="range" min="100" max="200" value="${Math.round((c.z0||1)*100)}">`)}${row("Zoom final",`<input id="cZ1" type="range" min="100" max="200" value="${Math.round((c.z1||1)*100)}">`)}
    ${row("Mover inicio",`<input id="cX0" type="range" min="-300" max="300" value="${c.x0||0}">`)}${row("Mover final",`<input id="cX1" type="range" min="-300" max="300" value="${c.x1||0}">`)}</div>
@@ -407,6 +443,8 @@ function scenePanel(P){
   <div class="card"><h4>🎞 Escenas</h4><div class="btns"><button id="sDup">⧉ Duplicar</button><button id="sL">◀ Antes</button><button id="sR">Después ▶</button><button id="sDel" class="danger">🗑</button></div></div>`;
   const ch=()=>changed();
   bind(P,"#sNom","onchange",e=>{sc.nombre=e.target.value||"Escena";ch();renderTl();});bind(P,"#sDur","onchange",e=>{sc.dur=clamp(+e.target.value||10,2,300);ch();renderTl();syncScrub();if(sc.amb)ambiente(sc,sc.amb.k,sc.amb.v);});
+  bind(P,"#sBm","onchange",e=>{sc.fondo=sc.fondo||{id:"pradera"};if(e.target.value)sc.fondo.mov=e.target.value;else delete sc.fondo.mov;ch();renderProps();draw();});
+  {const v=bind(P,"#sBv","oninput",e=>{sc.fondo.vel=+e.target.value;draw();});if(v)v.onchange=ch;}
   bind(P,"#sBg","onclick",()=>{rail="fon";renderLib();});{const cb=bind(P,"#sBgC","oninput",e=>{sc.fondo.color=e.target.value;draw();});if(cb)cb.onchange=()=>{ch();renderTl();};}bind(P,"#sHo","onchange",e=>{sc.hora=e.target.value;ch();});
   const pre={fija:[1,1,0,0],acercar:[1,1.35,0,0],alejar:[1.4,1,0,0],der:[1.15,1.15,-120,120],izq:[1.15,1.15,120,-120]};
   P.querySelectorAll("[data-cp]").forEach(b=>b.onclick=()=>{const a=pre[b.dataset.cp];Object.assign(c,{z0:a[0],z1:a[1],x0:a[2],x1:a[3]});ch();renderProps();say("Cámara lista: dale ▶ para verla.");});
@@ -448,11 +486,11 @@ function fullRender(){const ba=$("bAddScene");if(ba&&proj)ba.textContent="＋ "+
 
 /* ---------------- reproducción y exportación ---------------- */
 function say(t){const s=$("status");s.textContent=t;s.hidden=false;clearTimeout(tmr);tmr=setTimeout(()=>{s.hidden=true;},4200);}
-function sceneStart(w,live){if(window.Dub)Dub.begin(w,live);for(const it of w.items)it.dubLv=null;}
-function play(all){
+function sceneStart(w,live,from){if(window.Dub)Dub.begin(w,live,from||0);for(const it of w.items)it.dubLv=null;}
+function play(all,from){
   if(pv.on){stop("");return;}
-  sel=null;pv.on=true;pv.all=!!all;pv.exp=null;if(all)proj.mundo=0;pv.t=0;pv.last=performance.now();
-  renderProps();renderTl();sceneStart(curScene(),true);$("bPlay").textContent="⏹ Detener";$("bPlayAll").hidden=true;requestAnimationFrame(runLive);
+  sel=null;pv.on=true;pv.all=!!all;pv.exp=null;if(all)proj.mundo=0;pv.t=from||0;pv.last=performance.now();
+  renderProps();renderTl();sceneStart(curScene(),true,from||0);$("bPlay").textContent="⏹ Detener";$("bPlayAll").hidden=true;requestAnimationFrame(runLive);
 }
 function stop(msg){
   if(!pv.on)return;pv.on=false;const ex=pv.exp;pv.exp=null;
@@ -512,6 +550,16 @@ function setProj(p){
 function idb(){return new Promise((ok,no)=>{const r=indexedDB.open("atr_serie",1);r.onupgradeneeded=()=>r.result.createObjectStore("p");r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error);});}
 async function saveAuto(){if(window.__RENDER)return;try{const db=await idb(),tx=db.transaction("p","readwrite");tx.objectStore("p").put(JSON.stringify(proj,strip),"actual");$("info").textContent="✔ Guardado en este equipo";}catch(e){$("info").textContent="";}}
 async function loadAuto(){try{const db=await idb();return await new Promise(ok=>{const r=db.transaction("p").objectStore("p").get("actual");r.onsuccess=()=>ok(r.result);r.onerror=()=>ok(null);});}catch(e){return null;}}
+/* 📷 Foto: el cuadro actual como PNG, al tamaño final del proyecto (sin depender de la ventana) */
+function foto(){
+  if(pv.on||Studio.exporting){say("Detén la vista previa para sacar la foto.");return;}
+  const l=lienzoDe(proj),asp=UW()/UH(),tier=l.base,W=asp>=1?Math.round(tier*asp/2)*2:tier,H=asp>=1?tier:Math.round(tier/asp/2)*2;
+  const sc=curScene(),keep=sel;sel=null;engine.fijar(W,H);stepFrame(sc,edT);
+  const c=document.createElement("canvas");c.width=W;c.height=H;const g=c.getContext("2d");g.drawImage($("cv"),0,0);
+  if(window.Fx)Fx.draw(g,W,H);if(window.Dub)Dub.drawSub(g,W,H);
+  engine.soltar();sel=keep;draw();
+  c.toBlob(b=>{const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=((proj.nombre||"cuadro").replace(/[^\wáéíóúñ -]/gi,"").replace(/\s+/g,"-")||"cuadro")+"-"+W+"x"+H+".png";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000);say("Foto guardada: "+W+"×"+H+" px.");},"image/png");
+}
 function download(name,txt){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([txt],{type:"application/json"}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000);}
 function projDlg(){
   const m=$("projDlg");m.hidden=false;
@@ -561,12 +609,14 @@ function wire(){
 }
 
 /* ---------------- arranque ---------------- */
-const engine={getHardwareScalingLevel(){const c=$("cv");return c.clientWidth/c.width;},setHardwareScalingLevel(l){const c=$("cv");c.width=Math.round(c.clientWidth/l/2)*2;c.height=Math.round(c.width*UH()/UW());},resize(){fitCanvas();}};
-function fitCanvas(){const c=$("cv");if(!c||Studio.exporting)return;const dpr=Math.min(2,window.devicePixelRatio||1),w=Math.max(320,Math.round(c.clientWidth*dpr/2)*2);const h=Math.round(w*UH()/UW());if(c.width!==w||c.height!==h){c.width=w;c.height=h;}}
+/* al exportar, el lienzo se dibuja al TAMAÑO FINAL del video (no al de la ventana) */
+let fijo=null;
+const engine={fijar(W,H){fijo={W,H};const c=$("cv");c.width=W;c.height=H;},soltar(){fijo=null;fitCanvas();},get fijo(){return fijo;}};
+function fitCanvas(){const c=$("cv");if(!c||Studio.exporting||fijo)return;const dpr=Math.min(2,window.devicePixelRatio||1),w=Math.max(320,Math.round(c.clientWidth*dpr/2)*2);const h=Math.round(w*UH()/UW());if(c.width!==w||c.height!==h){c.width=w;c.height=h;}}
 function aplicarLienzo(){const f=$("frame");if(!f||!proj)return;const a=UW()/UH();f.style.aspectRatio=UW()+" / "+UH();f.style.setProperty("--asp",a);fitCanvas();}
-const Studio=window.Studio={proj:null,say,changed:()=>changed(),select:()=>{sel=null;renderProps();draw();},play:()=>play(false),stopPlay:()=>stop(""),exporting:false,
+const Studio=window.Studio={proj:null,say,changed:()=>changed(),select:()=>{sel=null;renderProps();draw();},play:()=>play(false),playFrom:t=>play(false,t),get tNow(){return pv.t;},stopPlay:()=>stop(""),exporting:false,
   get placed(){const sc=curScene();return sc?sc.items.filter(i=>i.kind==="actor"):[];},get playing(){return pv.on;},beginExport,cancelExport,totalSeconds,exportText,importText,
-  rerender:()=>fullRender(),dim,newProj,setProject:p=>{setProj(p);changed(true);},loadAuto,aplicarLienzo,FMT,BASES,lienzoDe,get serie(){return {proj:()=>proj,defOf,addActor,IMG:()=>IMG,changed,renderLib,uid};}};
+  rerender:()=>fullRender(),dim,newProj,setProject:p=>{setProj(p);changed(true);},loadAuto,aplicarLienzo,FMT,BASES,lienzoDe,get serie(){return {proj:()=>proj,defOf,addActor,IMG:()=>IMG,changed,renderLib,uid,loadImgs,say};},foto};
 window.__atr2={engine};
 window.Serie={dim,renderTl,renderProps,GAITS,gaitOf,poseOf,easeFn,bez,curScene,setT(t){if(pv.on)return;edT=clamp(t,0,curScene().dur);syncScrub();draw();},select(u){sel=u;renderProps();draw();},get sel(){return sel;},get playing(){return pv.on;},posAt,setKf,EASE,itemName(it){return it.kind==="actor"?(it.ficha&&it.ficha.nombre)||"Personaje":it.kind==="deco"?(SPD[it.ref]||{n:"Decoración"}).n:(proj.imgs[it.ref]||{}).n||"Imagen";},loadImgs,addImg,thumbs,saveAuto,addActorDef(def){proj.actores.push(def);changed();renderLib();say("Personaje guardado en «Mis personajes».");},get proj(){return proj;},changed,renderLib,say,addActor,play,draw,frame,defOf};
 
@@ -581,7 +631,7 @@ async function init(){
   $("bAddScene").onclick=()=>{const s=newScene(palabraEsc()+" "+(proj.mundos.length+1),JSON.parse(JSON.stringify(curScene().fondo)));proj.mundos.push(s);gotoScene(proj.mundos.length-1);changed();};
   $("scrub").oninput=e=>{if(pv.on)return;edT=+e.target.value;window.dispatchEvent(new CustomEvent("serie-time",{detail:edT}));const ka=document.getElementById("kAdd");if(ka)ka.textContent="🔑 Guardar aquí ("+edT.toFixed(1)+" s)";$("scrubT").textContent=edT.toFixed(1)+" / "+curScene().dur+" s";draw();};
   $("pNombre").onchange=e=>{proj.nombre=e.target.value||"Mi serie";changed(true);};
-  $("bProj").onclick=projDlg;$("projClose").onclick=()=>{$("projDlg").hidden=true;};
+  $("bProj").onclick=projDlg;if($("bFoto"))$("bFoto").onclick=foto;$("projClose").onclick=()=>{$("projDlg").hidden=true;};
   $("pjLz").onclick=()=>{$("projDlg").hidden=true;if(window.Inicio)Inicio.configurar();};
   $("pjNew").onclick=()=>{$("projDlg").hidden=true;if(window.Inicio)Inicio.abrir();};
   $("pjSave").onclick=()=>{download((proj.nombre||"mi-serie").replace(/[^\wáéíóúñ -]/gi,"").replace(/\s+/g,"-")+".atrapa",exportText());say("Archivo guardado en Descargas.");};

@@ -33,7 +33,8 @@ async function hayGuardado(){
 }
 function cerrar(){if(root){root.remove();root=null;}}
 function montar(){css();cerrar();root=el("div");root.id="inicio";const box=el("div","box");root.appendChild(box);document.body.appendChild(root);return box;}
-const cfg={fmt:"16:9",base:1080,fps:30,tipo:"animacion"};
+const MBPS=[[0,"Automático","según la resolución"],[6,"6 Mbps","liviano"],[10,"10 Mbps","bueno"],[16,"16 Mbps","alto (1080p)"],[25,"25 Mbps","muy alto"],[40,"40 Mbps","4K alto"],[60,"60 Mbps","máxima"],[100,"100 Mbps","casi sin pérdida"]];
+const cfg={fmt:"16:9",base:1080,fps:30,mbps:0,tipo:"animacion"};
 /* selector del lienzo, reutilizado en «nuevo» y en el asistente */
 function lienzoUI(parent){
   const F=Studio.FMT,B=Studio.BASES,wrap=el("div");
@@ -45,10 +46,11 @@ function lienzoUI(parent){
     const asp=k==="16:9"?[28,16]:k==="9:16"?[16,28]:[22,22];return `<span class="prev" style="width:${asp[0]}px;height:${asp[1]}px"></span><b>${k}</b><small>${esc(v.n.replace(/^[^(]*\(?/,"").replace(/\)$/,"")||v.n)}</small>`;});
   sel("Resolución base (lado corto del video)",B,()=>cfg.base,v=>{cfg.base=v;},([v,n])=>`<b>${n}</b><small class="rt" data-v="${v}">${resTxt(v)}</small>`);
   sel("Cuadros por segundo",FPS.map(f=>[f]),()=>cfg.fps,v=>{cfg.fps=v;},([f])=>`<b>${f} fps</b><small>${f===30?"recomendado":f===24?"cine":f>=50?"muy suave":"estándar"}</small>`);
+  sel("Calidad del video (bitrate)",MBPS.map(m=>[m[0]]),()=>cfg.mbps||0,v=>{cfg.mbps=v;},([v])=>{const m=MBPS.find(x=>x[0]===v);return `<b>${m[1]}</b><small>${m[2]}</small>`;});
   wrap.appendChild(el("p","nota","Puedes cambiar esto después en 💾 Proyecto → Configuración del lienzo. Al exportar eliges la calidad final."));
   parent.appendChild(wrap);
 }
-const lz=()=>({fmt:cfg.fmt,base:cfg.base,fps:cfg.fps});
+const lz=()=>({fmt:cfg.fmt,base:cfg.base,fps:cfg.fps,mbps:cfg.mbps||0});
 async function confirmarReemplazo(){
   const g=guardado;if(!g||g.vacio)return true;
   return confirm("Hay un proyecto guardado automáticamente («"+g.nombre+"»). Si sigues, el trabajo nuevo lo reemplaza apenas hagas un cambio.\n\nSi quieres conservarlo, cancela, ábrelo con «Continuar» y guárdalo como archivo.\n\n¿Seguir de todos modos?");
@@ -106,8 +108,8 @@ function pantallaAsistenteLienzo(h){
 }
 /* configuración del lienzo de un proyecto ya abierto */
 function configurar(){
-  const P=Studio.proj,l=Studio.lienzoDe(P);cfg.fmt=l.fmt;cfg.base=l.base;cfg.fps=l.fps;
-  const b=montar();b.innerHTML=`<h2>📐 Configuración del lienzo</h2><p class="sub">Cambia el formato, la resolución base y los cuadros por segundo de «${esc(P.nombre||"tu proyecto")}».</p>`;lienzoUI(b);
+  const P=Studio.proj,l=Studio.lienzoDe(P);cfg.fmt=l.fmt;cfg.base=l.base;cfg.fps=l.fps;cfg.mbps=l.mbps||0;
+  const b=montar();b.innerHTML=`<h2>📐 Configuración del lienzo</h2><p class="sub">Cambia el formato, la resolución base, los cuadros por segundo y el bitrate de «${esc(P.nombre||"tu proyecto")}».</p>`;lienzoUI(b);
   b.appendChild(el("p","nota","Si cambias el formato, lo que ya pusiste en el cuadro conserva su lugar y puede quedar cortado: revisa cada escena."));
   const v=el("div","row2"),a=el("button","sec","Cancelar"),c=el("button","pri","Aplicar");a.onclick=cerrar;
   c.onclick=()=>{P.lienzo=lz();Studio.aplicarLienzo();Studio.rerender();Studio.changed();cerrar();Studio.say("Lienzo: "+cfg.fmt+" · "+cfg.base+"p · "+cfg.fps+" fps.");};

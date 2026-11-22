@@ -58,7 +58,7 @@ Botón **📦 Paquetes** en la biblioteca. Importa un `.zip` de Kenney, Quaterni
 
 ## 🎬 Modo Serie (nuevo)
 Al abrir el programa entra directo al editor de recortes: 1 Elenco · 2 Escena · 3 Voces · 4 MP4.
-El Studio 3D anterior sigue disponible en 💾 Proyecto → «Avanzado».
+El Studio 3D anterior se retiró: lo útil pasó al editor actual (asistente de historias, 📷 Foto, paquetes de imágenes .zip, momento del día y cámara).
 
 ## 🎭 Novedades de movimiento (Modo Serie)
 - **Acciones rápidas** en cada personaje: saludar, señalar (a otro personaje u objeto), saltar, bailar, asustarse, reír, pensar.
@@ -102,3 +102,11 @@ Al abrir el programa aparece un inicio con tres opciones:
 - **Asistente de proyecto**: 10 cuentos clásicos de dominio público ya armados (Los tres cerditos, Caperucita Roja, El patito feo, La liebre y la tortuga, Ricitos de Oro, La cigarra y la hormiga, El gato con botas, Hansel y Gretel, El león y el ratón, Los músicos de Bremen), con escenas, fondos y narración editables, en el formato que elijas.
 
 El lienzo se puede cambiar después en **💾 Proyecto → Configuración del lienzo**. Al exportar, la calidad elegida es el lado corto del video (en vertical, 1080p = 1080×1920).
+
+## Novedades
+- Exportación en tamaño final real (1080p / 4K), con elección de bitrate (proyecto y diálogo de exportar).
+- Estudio de grabación con video: ves la escena con subtítulos, cuenta regresiva y guion que sigue tu voz.
+- Todo se puede animar: fondo (deriva, vaivén, respirar, acercar), entrada/salida de personajes, decoración e imágenes, y textos (aparecer, subir, crecer, rebotar, escribirse, flotar, latir).
+- 📷 Foto (PNG a tamaño final) y paquetes de imágenes .zip.
+- Se quitó el motor 3D antiguo; lo útil quedó en el asistente, Momento del día, cámara y paquetes.
+- Próxima etapa: núcleo nativo Rust + wgpu y exportación con FFmpeg (NVENC/AMF/QSV).

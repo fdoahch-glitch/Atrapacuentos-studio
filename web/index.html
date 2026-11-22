@@ -142,7 +142,7 @@ input[type=number],input[type=text]{background:#12141c;border:1px solid #343a58;
   <div id="steps"><button data-step="1"><b>1</b> Elenco</button><button data-step="2"><b>2</b> Escena</button><button data-step="3"><b>3</b> Voces</button><button data-step="4"><b>4</b> MP4</button></div>
   <span class="sp"></span><span id="info"></span>
   <button id="bUndo" title="Deshacer (Ctrl+Z)" disabled>↩</button><button id="bRedo" title="Rehacer (Ctrl+Y)" disabled>↪</button><button id="bProj">💾 Proyecto</button>
-  <button id="bSub" title="Subtítulos">💬 Subtítulos</button><button id="bDub">🎙 Estudio de grabación</button><button id="bExp">🎞 Exportar MP4</button>
+  <button id="bSub" title="Subtítulos">💬 Subtítulos</button><button id="bDub">🎙 Estudio de grabación</button><button id="bFoto" title="Guarda el cuadro actual como imagen PNG, al tamaño final">📷 Foto</button><button id="bExp">🎞 Exportar MP4</button>
   <button id="bPlayAll">▶▶ Ver todo</button><button id="bPlay" class="go">▶ Vista previa</button>
 </div>
 <div id="main">
@@ -160,7 +160,7 @@ input[type=number],input[type=text]{background:#12141c;border:1px solid #343a58;
 <input id="fUp" type="file" hidden>
 <div id="projDlg" class="modal" hidden><div class="mbox" style="max-width:520px"><h2>💾 Proyecto</h2><p>Tu proyecto se guarda solo en este equipo. Para llevarlo a otro computador, guárdalo como archivo.</p>
  <div class="btns"><button id="pjSave" class="go">⬇ Guardar archivo</button><button id="pjOpen">📂 Abrir archivo</button><button id="pjNew" class="pri">🏠 Inicio · nuevo proyecto</button><button id="pjLz">📐 Configuración del lienzo</button></div>
- <p style="margin-top:14px"><a href="avanzado.html" style="color:#ffb347">⚙ Avanzado: abrir el Studio 3D antiguo</a></p><div class="wnav"><span></span><button id="projClose">Cerrar</button></div></div></div>
+ <div class="wnav"><span></span><button id="projClose">Cerrar</button></div></div></div>
 <div id="tallerDlg" class="modal" hidden></div>
 <div id="dibDlg" class="modal" hidden></div>
 <div id="exp" class="modal" hidden><div class="mbox" id="expBox">
@@ -168,6 +168,7 @@ input[type=number],input[type=text]{background:#12141c;border:1px solid #343a58;
 <div id="expOpts"><p>Se crea un video de todo el cuento, escena por escena, listo para subir a YouTube. <b id="expInfo"></b></p>
 <p><b>Calidad</b><br><label><input type="radio" name="expRes" value="720"> 720p (rápido)</label> &nbsp; <label><input type="radio" name="expRes" value="1080" checked> 1080p (recomendado)</label> &nbsp; <label><input type="radio" name="expRes" value="1440"> 2K</label> &nbsp; <label><input type="radio" name="expRes" value="2160"> 4K (lento, pesado)</label></p>
 <p><b>Fluidez</b><br><label><input type="radio" name="expFps" value="24"> 24</label> &nbsp; <label><input type="radio" name="expFps" value="25"> 25</label> &nbsp; <label><input type="radio" name="expFps" value="30" checked> 30 (recomendado)</label> &nbsp; <label><input type="radio" name="expFps" value="50"> 50</label> &nbsp; <label><input type="radio" name="expFps" value="60"> 60</label> <small style="opacity:.7">cuadros por segundo; más cuadros = más suave y más lento</small><br><small style="opacity:.7">Se codifica con la tarjeta de video (GPU); si tu equipo no puede, usa la CPU y te avisa.</small></p>
+<p><b>Calidad del video (bitrate)</b><br><select id="expMbps"><option value="0">Automático (según resolución)</option><option value="6">6 Mbps · liviano</option><option value="10">10 Mbps · bueno</option><option value="16">16 Mbps · alto</option><option value="25">25 Mbps · muy alto</option><option value="40">40 Mbps · 4K alto</option><option value="60">60 Mbps · máxima</option><option value="100">100 Mbps · casi sin pérdida</option></select> <input id="expMbpsC" type="number" min="1" max="400" step="1" placeholder="otro (Mbps)" style="width:110px"> <small id="expPeso" style="opacity:.75"></small><br><small style="opacity:.7">A mayor bitrate, mayor calidad y archivo más grande. Para YouTube: 1080p 8–16 Mbps, 4K 35–60 Mbps.</small></p>
 <p><b>Subtítulos</b><br><label><input type="checkbox" id="expSub"> Dentro del video</label> <small style="opacity:.7">(si lo desmarcas, el video sale limpio y puedes guardar los subtítulos aparte en .srt)</small></p>
 <p id="expWarn" style="color:#ff9d9d" hidden></p>
 <button id="expGo" class="go">🎬 Crear video</button> <button id="expBg" title="Se crea aparte, con una copia de tu serie, y puedes seguir editando">🛰 En segundo plano</button> <button id="expClose">Cerrar</button><p style="font-size:12px;opacity:.7;margin:8px 0 0">«En segundo plano» guarda una copia de tu serie como está ahora y la exporta aparte, mientras sigues trabajando. Puedes dejar varias en cola. Usa el mismo procesador, así que el editor puede ir un poco más lento.</p></div>
@@ -177,7 +178,7 @@ input[type=number],input[type=text]{background:#12141c;border:1px solid #343a58;
 <script>window.EST={};</script>
 <script src="vendor/mp4-muxer.js"></script>
 <script src="js/subs.js"></script><script src="js/dubx.js"></script><script src="js/dubfx.js"></script><script src="js/fx.js"></script><script src="js/dub.js"></script><script src="js/export.js"></script>
-<script src="js/serie_look.js"></script><script src="js/serie_ia.js"></script><script src="js/serie_curvas.js"></script><script src="js/serie_poses.js"></script><script src="js/serie_import.js"></script><script src="js/serie_biblio.js"></script><script src="js/historias.js"></script><script src="js/inicio.js"></script><script src="js/serie_bg.js"></script>
+<script src="js/serie_look.js"></script><script src="js/serie_ia.js"></script><script src="js/serie_curvas.js"></script><script src="js/serie_poses.js"></script><script src="js/serie_import.js"></script><script src="js/serie_biblio.js"></script><script src="js/historias.js"></script><script src="js/inicio.js"></script><script src="js/serie_paquetes.js"></script><script src="js/serie_bg.js"></script>
 <script src="js/serie_art.js"></script><script src="js/serie_rig.js"></script><script src="js/actor_dino.js"></script><script src="js/serie_rigauto.js"></script><script src="js/serie_taller.js"></script><script src="js/serie_dibujo.js"></script><script src="js/serie.js"></script><script src="js/serie_panels.js"></script><script src="js/serie_tracks.js"></script>
 <div id="bgQ"></div>
 </body></html>

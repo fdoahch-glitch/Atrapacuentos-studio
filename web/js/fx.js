@@ -67,6 +67,21 @@ function drawText(g,W,H,o){
   g.restore();
 }
 
+/* ✨ textos animados: entrada (aparecer, subir, zoom, rebote, escribir), salida y movimiento continuo */
+function animText(g,W,H,o){
+  if(st.edit||(!o.ent&&!o.sal&&!o.mov)){drawText(g,W,H,o);return;}
+  const t=st.t,t0=o.t0||0,t1=o.t1>0?o.t1:(st.w.dur||6),d=.7,lt=t-t0;let a=1,dy=0,s=1,txt=o.txt;
+  const eo=u=>1-Math.pow(1-u,3),eb=u=>{const c=1.70158;return 1+(c+1)*Math.pow(u-1,3)+c*Math.pow(u-1,2);};
+  if(o.ent&&lt<d){const u=Math.max(0,lt/d);
+    if(o.ent==="aparecer")a=eo(u);else if(o.ent==="subir"){a=eo(u);dy=(1-eo(u))*H*.12;}else if(o.ent==="zoom"){a=eo(u);s=.3+.7*eo(u);}
+    else if(o.ent==="rebote"){a=Math.min(1,u*4);s=Math.max(0,eb(u));}else if(o.ent==="escribir"){const n=Math.ceil(String(o.txt||"").length*Math.min(1,lt/Math.max(.6,String(o.txt||"").length*.05)));txt=String(o.txt||"").slice(0,n);}}
+  else if(o.ent==="escribir"&&lt<Math.max(.6,String(o.txt||"").length*.05)){const n=Math.ceil(String(o.txt||"").length*Math.min(1,lt/Math.max(.6,String(o.txt||"").length*.05)));txt=String(o.txt||"").slice(0,n);}
+  if(o.sal&&t>t1-d){const u=Math.min(1,(t-(t1-d))/d);a*=1-u;if(o.sal==="bajar")dy+=u*u*H*.1;else if(o.sal==="zoom")s*=1-.5*u*u;}
+  if(o.mov==="flotar")dy+=Math.sin(t*2)*H*.012;else if(o.mov==="latir")s*=1+.04*Math.sin(t*4);
+  const cx=W*o.x/100,cy=H*o.y/100;g.save();g.globalAlpha*=Math.max(0,a);g.translate(cx,cy+dy);g.scale(s,s);g.translate(-cx,-cy);
+  drawText(g,W,H,Object.assign({},o,{txt}));g.restore();
+}
+
 /* ---------- transiciones ---------- */
 function trans(g,W,H){
   const w=st.w,t=st.t,P=S().proj;
@@ -86,7 +101,7 @@ function draw(g,W,H){
   if(w.efecto)ambient(g,W,H,st.t,w.efecto);
   for(const o of (w.textos||[])){
     if(!st.edit){const t1=o.t1>0?o.t1:1e9;if(st.t<o.t0||st.t>t1)continue;}
-    drawText(g,W,H,o);
+    animText(g,W,H,o);
   }
   if(!st.edit)trans(g,W,H);
 }
@@ -130,12 +145,16 @@ function panel(w,props){
     <div class="row"><span>Arriba ↕ Abajo</span><input class="py" type="range" min="5" max="95" value="${o.y}"></div>
     <div class="row"><span>Tamaño</span><input class="sz" type="range" min="3" max="14" value="${o.size||6}"></div>
     <div class="row"><span>Aparece (s)</span><input class="t0" type="number" min="0" step=".5" value="${o.t0||0}" style="width:60px"><span>Hasta (s)</span><input class="t1" type="number" min="0" step=".5" value="${o.t1||0}" style="width:60px"></div>
-    <div class="sub" style="font-size:11px;opacity:.7">«Hasta» 0 = hasta el final de la escena.</div>`;
+    <div class="sub" style="font-size:11px;opacity:.7">«Hasta» 0 = hasta el final de la escena.</div>
+    <div class="row"><span>Entra</span><select class="an">${[["","Directo"],["aparecer","Aparecer"],["subir","Subir"],["zoom","Crecer"],["rebote","Rebotar"],["escribir","Escribirse"]].map(([v,l])=>`<option value="${v}" ${(o.ent||"")===v?"selected":""}>${l}</option>`).join("")}</select></div>
+    <div class="row"><span>Sale</span><select class="as">${[["","Directo"],["aparecer","Desaparecer"],["bajar","Bajar"],["zoom","Achicarse"]].map(([v,l])=>`<option value="${v}" ${(o.sal||"")===v?"selected":""}>${l}</option>`).join("")}</select></div>
+    <div class="row"><span>Movimiento</span><select class="am">${[["","Quieto"],["flotar","Flotar"],["latir","Latir"]].map(([v,l])=>`<option value="${v}" ${(o.mov||"")===v?"selected":""}>${l}</option>`).join("")}</select></div>`;
     const q=s=>d.querySelector(s);
     q(".tp").onchange=e=>{o.tipo=e.target.value;ch();};q(".tx").onchange=e=>{o.txt=e.target.value;ch();};
     q(".px").oninput=e=>{o.x=+e.target.value;};q(".px").onchange=ch;q(".py").oninput=e=>{o.y=+e.target.value;};q(".py").onchange=ch;
     q(".sz").oninput=e=>{o.size=+e.target.value;};q(".sz").onchange=ch;
     q(".t0").onchange=e=>{o.t0=+e.target.value||0;ch();};q(".t1").onchange=e=>{o.t1=+e.target.value||0;ch();};
+    q(".an").onchange=e=>{if(e.target.value)o.ent=e.target.value;else delete o.ent;ch();};q(".as").onchange=e=>{if(e.target.value)o.sal=e.target.value;else delete o.sal;ch();};q(".am").onchange=e=>{if(e.target.value)o.mov=e.target.value;else delete o.mov;ch();};
     q(".dl").onclick=()=>{ls.splice(k,1);ch();};
     L.appendChild(d);
   });
