@@ -62,23 +62,27 @@ function init(){
     try{info=await Nativo.iniciar({w:W,h:H,fps,mbps:mb||0,codec,salida,audio,maestra,duracion:total/fps});}
     catch(e){$("expWarn").hidden=false;$("expWarn").textContent="No pude iniciar la exportación: "+e;show(true,false,false);busy=false;if(window.__onExportErr)__onExportErr(String(e));return;}
     const cv=$("cv"),eng=A.engine;eng.fijar(W,H);
-    const tmp=document.createElement("canvas");tmp.width=W;tmp.height=H;const g=tmp.getContext("2d",{willReadFrequently:true});
+    /* el cuadro se arma en un lienzo de la GPU y un shader lo convierte a YUV sin pasar por la CPU */
+    const tmp=document.createElement("canvas");tmp.width=W;tmp.height=H;const g=tmp.getContext("2d");
+    const lector=Nativo.lector?Nativo.lector(W,H):null;
+    let rgbaCtx=null;const leerRgba=()=>{if(!rgbaCtx){const c2=document.createElement("canvas");c2.width=W;c2.height=H;rgbaCtx=c2.getContext("2d",{willReadFrequently:true});}rgbaCtx.drawImage(tmp,0,0);return Promise.resolve(new Uint8Array(rgbaCtx.getImageData(0,0,W,H).data.buffer));};
     const cola=[];let bombeando=null,err=null,n=0;
-    const bombear=()=>bombeando||(bombeando=(async()=>{try{while(cola.length&&!err){await Nativo.cuadro(cola.shift());}}catch(e){err=e;}bombeando=null;})());
+    const bombear=()=>bombeando||(bombeando=(async()=>{try{while(cola.length&&!err){await Nativo.cuadro(await cola.shift());}}catch(e){err=e;}bombeando=null;})());
     const ex={fps,cancelled:false,
-      skip(){return cola.length>=3&&!err;},
+      skip(){return !err&&(cola.length>=4||(lector&&lector.pendientes>=lector.capacidad));},
       capture(){
         if(err||ex.cancelled)return;
         g.drawImage(cv,0,0,W,H);if(window.Fx)Fx.draw(g,W,H);if(window.Dub)Dub.drawSub(g,W,H);
-        cola.push(new Uint8Array(g.getImageData(0,0,W,H).data.buffer));bombear();n++;
+        cola.push(lector?lector.leer(tmp):leerRgba());bombear();n++;
         const u=Math.min(1,n/total);$("expBar").style.width=(u*100).toFixed(1)+"%";if(window.__onExportProg)__onExportProg(u,n,total,fps);
         $("expTxt").textContent="Creando video con "+(info.gpu?info.marca:"la CPU")+"… "+Math.round(u*100)+"%  ("+fmt(n/fps)+" de "+fmt(total/fps)+")";
       },
       async end(){
         S.exporting=false;eng.soltar();
         try{
-          if(ex.cancelled){await Nativo.cancelar();show(true,false,false);busy=false;return;}
+          if(ex.cancelled){if(lector)lector.cerrar();await Nativo.cancelar();show(true,false,false);busy=false;return;}
           while(bombeando||cola.length){bombear();await bombeando;if(err)break;}
+          if(lector)lector.cerrar();
           if(err)throw err;
           const bytes=await Nativo.terminar();
           $("expVid").removeAttribute("src");$("expVid").hidden=true;
@@ -87,7 +91,7 @@ function init(){
           show(false,false,true);if(window.__onExportDone)__onExportDone(null,nm,$("expRes").textContent);
           {const sb=$("expSrtBtn");if(sb){sb.hidden=!(window.Subs&&Subs.cues().length);sb.onclick=()=>Subs.downloadSrt();}}
         }catch(e){
-          try{await Nativo.cancelar();}catch(_){}
+          if(lector)lector.cerrar();try{await Nativo.cancelar();}catch(_){}
           $("expWarn").hidden=false;$("expWarn").textContent="No se pudo terminar el video: "+(e&&e.message||e);show(true,false,false);if(window.__onExportErr)__onExportErr(String(e&&e.message||e));
         }
         busy=false;

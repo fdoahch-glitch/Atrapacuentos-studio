@@ -5,7 +5,7 @@ use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, Command, Stdio};
+use std::process::{Child, Command, Stdio};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -73,7 +73,26 @@ pub struct Opciones {
 }
 fn h264() -> String { "h264".into() }
 
-pub struct Exportacion { child: Child, stdin: Option<ChildStdin>, errores: std::sync::Arc<std::sync::Mutex<String>>, yuv: Yuv, pub usado: Codificador, pub cuadros: u64, pub gpu_nombre: String }
+pub struct Exportacion {
+    child: Child,
+    tx: Option<std::sync::mpsc::SyncSender<Vec<u8>>>,
+    escritor: Option<std::thread::JoinHandle<()>>,
+    fallo: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    errores: std::sync::Arc<std::sync::Mutex<String>>,
+    yuv: Yuv, w: u32, h: u32,
+    pub usado: Codificador, pub cuadros: u64, pub gpu_nombre: String,
+}
+
+/// Cuadro ya convertido a YUV 4:2:0 por la tarjeta de video de la ventana (WebGL): W×(H·3/2) bytes.
+/// Filas 0..H = Y; luego H/2 filas con U en la mitad izquierda y V en la derecha. Se ordena como I420.
+pub fn empaquetado_a_i420(w: usize, h: usize, src: &[u8]) -> Vec<u8> {
+    let mut o = Vec::with_capacity(w * h * 3 / 2);
+    o.extend_from_slice(&src[..w * h]);
+    let (cw, ch) = (w / 2, h / 2);
+    for cy in 0..ch { let r = w * h + cy * w; o.extend_from_slice(&src[r..r + cw]); }
+    for cy in 0..ch { let r = w * h + cy * w + cw; o.extend_from_slice(&src[r..r + cw]); }
+    o
+}
 
 pub fn bitrate_auto(w: u32, h: u32, fps: u32) -> f32 {
     let px = w as f32 * h as f32;
@@ -109,7 +128,14 @@ impl Exportacion {
         if o.audio.is_some() { a.extend(["-map", "1:a", "-c:a", "aac", "-b:a", "192k"].map(String::from)); }
         if o.duracion > 0.0 { a.extend(["-t".to_string(), format!("{:.3}", o.duracion)]); }
         a.extend(args_codificador(&enc, mbps, o.fps));
-        a.extend(["-pix_fmt", "yuv420p", "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv", "-movflags", "+faststart"].map(String::from));
+        // Las etiquetas de color (BT.709, rango limitado) se escriben en el flujo ya codificado. Con las opciones
+        // -colorspace/-color_* FFmpeg nuevo reconvierte los colores y los desplaza; así los cuadros quedan intactos.
+        let bsf = match enc.codec.as_str() {
+            "hevc" => "hevc_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0",
+            "av1" => "av1_metadata=color_primaries=1:transfer_characteristics=1:matrix_coefficients=1:color_range=tv",
+            _ => "h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0",
+        };
+        a.extend(["-pix_fmt", "yuv420p", "-bsf:v", bsf, "-movflags", "+faststart"].map(String::from));
         a.push(o.salida.clone());
         if let Some(m) = &o.maestra {
             // copia maestra sin pérdida visible (ProRes 422 HQ) para editar o volver a exportar
@@ -119,7 +145,7 @@ impl Exportacion {
             a.push(m.clone());
         }
         let mut child = cmd(&ffmpeg_path()).args(&a).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::piped()).spawn().context("no se pudo abrir FFmpeg")?;
-        let stdin = child.stdin.take();
+        let mut stdin = child.stdin.take().ok_or_else(|| anyhow!("FFmpeg sin entrada"))?;
         // se lee lo que diga FFmpeg mientras trabaja, para poder explicar un fallo
         let errores = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
         if let Some(mut se) = child.stderr.take() {
@@ -127,29 +153,45 @@ impl Exportacion {
             std::thread::spawn(move || { use std::io::Read; let mut b = [0u8; 4096]; while let Ok(n) = se.read(&mut b) { if n == 0 { break; } let mut g = e2.lock().unwrap(); if g.len() < 8000 { g.push_str(&String::from_utf8_lossy(&b[..n])); } } });
         }
         let gpu_nombre = format!("{} ({}, {})", yuv.info.nombre, yuv.info.api, yuv.info.tipo);
-        Ok(Self { child, stdin, errores, yuv, usado: enc, cuadros: 0, gpu_nombre })
+        // los cuadros se escriben a FFmpeg en otro hilo, para que el programa pueda ir preparando el siguiente
+        let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<u8>>(4);
+        let fallo = std::sync::Arc::new(std::sync::Mutex::new(None::<String>));
+        let f2 = fallo.clone();
+        let escritor = std::thread::spawn(move || {
+            while let Ok(c) = rx.recv() { if let Err(e) = stdin.write_all(&c) { *f2.lock().unwrap() = Some(e.to_string()); break; } }
+        });
+        Ok(Self { child, tx: Some(tx), escritor: Some(escritor), fallo, errores, yuv, w: o.w, h: o.h, usado: enc, cuadros: 0, gpu_nombre })
     }
 
-    pub fn cuadro(&mut self, rgba: &[u8]) -> Result<()> {
-        let yuv = self.yuv.convertir(rgba)?;
-        let si = self.stdin.as_mut().ok_or_else(|| anyhow!("la exportación ya terminó"))?;
-        if let Err(e) = si.write_all(&yuv) {
-            std::thread::sleep(std::time::Duration::from_millis(150));
-            let det = self.errores.lock().unwrap().trim().to_string();
-            return Err(anyhow!("FFmpeg dejó de responder ({}): {}", self.usado.id, if det.is_empty() { e.to_string() } else { det }));
-        }
+    fn motivo(&self, e: String) -> anyhow::Error {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        let det = self.errores.lock().unwrap().trim().to_string();
+        anyhow!("FFmpeg dejó de responder ({}): {}", self.usado.id, if det.is_empty() { e } else { det })
+    }
+
+    /// Acepta un cuadro RGBA (w·h·4) o ya en YUV empaquetado (w·h·3/2).
+    pub fn cuadro(&mut self, datos: &[u8]) -> Result<()> {
+        if let Some(f) = self.fallo.lock().unwrap().clone() { return Err(self.motivo(f)); }
+        let (w, h) = (self.w as usize, self.h as usize);
+        let i420 = if datos.len() == w * h * 4 { self.yuv.convertir(datos)? }
+            else if datos.len() == w * h * 3 / 2 { empaquetado_a_i420(w, h, datos) }
+            else { return Err(anyhow!("cuadro de tamaño incorrecto ({} bytes)", datos.len())); };
+        let tx = self.tx.as_ref().ok_or_else(|| anyhow!("la exportación ya terminó"))?;
+        if tx.send(i420).is_err() { let f = self.fallo.lock().unwrap().clone().unwrap_or_default(); return Err(self.motivo(f)); }
         self.cuadros += 1;
         Ok(())
     }
 
     pub fn terminar(mut self) -> Result<()> {
-        drop(self.stdin.take());
+        drop(self.tx.take());
+        if let Some(h) = self.escritor.take() { let _ = h.join(); }
+        if let Some(f) = self.fallo.lock().unwrap().clone() { let _ = self.child.kill(); return Err(self.motivo(f)); }
         let st = self.child.wait()?;
         std::thread::sleep(std::time::Duration::from_millis(100));
         if !st.success() { return Err(anyhow!("FFmpeg falló ({}): {}", self.usado.id, self.errores.lock().unwrap().trim())); }
         Ok(())
     }
-    pub fn cancelar(mut self) { drop(self.stdin.take()); let _ = self.child.kill(); let _ = self.child.wait(); }
+    pub fn cancelar(mut self) { drop(self.tx.take()); let _ = self.child.kill(); if let Some(h) = self.escritor.take() { let _ = h.join(); } let _ = self.child.wait(); }
 }
 
 /// Escribe un WAV de 16 bits estéreo (entrada: muestras intercaladas L,R en f32).
@@ -168,6 +210,17 @@ pub fn escribir_wav(ruta: &Path, sr: u32, canales: u16, f32s: &[f32]) -> Result<
 mod tests {
     use super::*;
     #[test]
+    fn reordena_yuv_empaquetado() {
+        let (w, h) = (8usize, 4usize);
+        let mut s = vec![0u8; w * h * 3 / 2];
+        for i in 0..w * h { s[i] = 1; }
+        for cy in 0..h / 2 { for x in 0..w / 2 { s[w * h + cy * w + x] = 10 + (cy * 4 + x) as u8; s[w * h + cy * w + w / 2 + x] = 50 + (cy * 4 + x) as u8; } }
+        let o = empaquetado_a_i420(w, h, &s);
+        assert_eq!(o.len(), 48);
+        assert_eq!(&o[32..40], &[10, 11, 12, 13, 14, 15, 16, 17]);
+        assert_eq!(&o[40..48], &[50, 51, 52, 53, 54, 55, 56, 57]);
+    }
+    #[test]
     fn exporta_mp4_con_audio_y_maestra() {
         let lista = detectar();
         eprintln!("codificadores: {:?}", lista.iter().map(|c| c.id.clone()).collect::<Vec<_>>());
@@ -185,7 +238,34 @@ mod tests {
         let info = |f: &Path| { let o = cmd(&ffmpeg_path()).args(["-hide_banner", "-i"]).arg(f).output().unwrap(); String::from_utf8_lossy(&o.stderr).to_string() };
         let t = info(&dir.join("o.mp4")); eprintln!("{t}");
         assert!(t.contains("Video: h264") && t.contains("320x180") && t.contains("Audio: aac") && t.contains("bt709") && t.contains("Duration: 00:00:02"), "mp4 inesperado");
+        assert!(t.contains("bt709, progressive") || t.matches("bt709").count() >= 3, "faltan las etiquetas de color BT.709");
         let m = info(&dir.join("m.mov"));
         assert!(m.contains("prores"), "la copia maestra debe ser ProRes");
+    }
+
+    #[test]
+    fn colores_fieles_en_los_dos_caminos() {
+        // un cuadro liso (255,210,122) debe volver igual (±3) tanto por el camino RGBA (wgpu) como por el YUV de la ventana
+        let lista = detectar();
+        let dir = std::env::temp_dir().join("atrapa_color"); std::fs::create_dir_all(&dir).unwrap();
+        let (w, h) = (128usize, 72usize);
+        let mut rgba = vec![255u8; w * h * 4]; for p in rgba.chunks_mut(4) { p[0] = 255; p[1] = 210; p[2] = 122; }
+        let yuv_i420 = crate::yuv::rgba_a_i420_cpu(w, h, &rgba);
+        // el mismo cuadro en el formato empaquetado de la ventana (Y; luego U|V lado a lado)
+        let mut emp = yuv_i420[..w * h].to_vec();
+        let (cw, ch) = (w / 2, h / 2);
+        for cy in 0..ch { emp.extend_from_slice(&yuv_i420[w * h + cy * cw..w * h + (cy + 1) * cw]); emp.extend_from_slice(&yuv_i420[w * h + cw * ch + cy * cw..w * h + cw * ch + (cy + 1) * cw]); }
+        for (nombre, datos) in [("rgba", rgba.clone()), ("yuv", emp)] {
+            for codec in ["h264", "hevc"] {
+                let salida = dir.join(format!("{nombre}_{codec}.mp4"));
+                let o = Opciones { w: w as u32, h: h as u32, fps: 30, mbps: 4.0, codec: codec.into(), codificador: None, salida: salida.to_string_lossy().into(), audio: None, duracion: 0.0, maestra: None };
+                let mut e = Exportacion::iniciar(&o, &lista).unwrap();
+                for _ in 0..10 { e.cuadro(&datos).unwrap(); }
+                e.terminar().unwrap();
+                let out = cmd(&ffmpeg_path()).args(["-v", "error", "-i"]).arg(&salida).args(["-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]).output().unwrap();
+                let (r, g, b) = (out.stdout[0] as i32, out.stdout[1] as i32, out.stdout[2] as i32);
+                assert!((r - 255).abs() <= 3 && (g - 210).abs() <= 3 && (b - 122).abs() <= 3, "{nombre}/{codec}: color {r},{g},{b} en vez de 255,210,122");
+            }
+        }
     }
 }
