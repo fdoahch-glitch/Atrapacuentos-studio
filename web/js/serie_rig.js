@@ -10,7 +10,8 @@ const gl_cv=document.createElement("canvas");
 let gl=null,pr=null,lp,lu,uR,uT;
 function initGL(){
   if(gl)return true;
-  gl=gl_cv.getContext("webgl",{premultipliedAlpha:true,alpha:true,antialias:true,preserveDrawingBuffer:false})||gl_cv.getContext("experimental-webgl");
+  const ga={premultipliedAlpha:true,alpha:true,antialias:true,preserveDrawingBuffer:false};
+  gl=gl_cv.getContext("webgl2",ga)||gl_cv.getContext("webgl",ga)||gl_cv.getContext("experimental-webgl");
   if(!gl)return false;
   const sh=(t,s)=>{const x=gl.createShader(t);gl.shaderSource(x,s);gl.compileShader(x);if(!gl.getShaderParameter(x,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(x));return x;};
   pr=gl.createProgram();
@@ -29,7 +30,9 @@ function loadImg(src){return new Promise(ok=>{if(typeof src!=="string")return ok
 function tex(img){
   const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,true);
   gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img);
-  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  /* con WebGL2 se usan mipmaps: al achicar el personaje no salen dientes de sierra ni bordes pixelados */
+  const mip=typeof WebGL2RenderingContext!=="undefined"&&gl instanceof WebGL2RenderingContext;if(mip)gl.generateMipmap(gl.TEXTURE_2D);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,mip?gl.LINEAR_MIPMAP_LINEAR:gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);return t;
 }
 function mesh(p,step){

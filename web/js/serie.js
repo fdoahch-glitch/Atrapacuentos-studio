@@ -174,7 +174,7 @@ function drawItemIn(g,sc,it,t,cam,sx,opt){
     g.translate(X+dx*sx*z,Y+dy*sx*z);if(rot+P.r)g.rotate(rot+P.r);if(sc2!==1)g.scale(sc2,sc2);
     const hh=sp.h*k,ww=sp.h*sp.a*k;
     if(mv==="aletear"||mv==="parpadear"){g.save();g.scale(k,k);const by=sp.anc==="b"?0:sp.anc==="t"?sp.h:sp.h/2;sp.draw(g,0,by,sp.h,A.RND(3),{t});g.restore();}
-    else{const rs=Math.round(clamp(k,.35,1.6)*4)/4,s=A.sprite(sp,rs);g.drawImage(s.cv,-s.ax*k,-s.ay*k,s.wU*k,s.hU*k);}
+    else{const rs=Math.round(clamp(k,.35,3)*4)/4,s=A.sprite(sp,rs);g.drawImage(s.cv,-s.ax*k,-s.ay*k,s.wU*k,s.hU*k);}
     bb={x:X+dx*sx*z-ww*.5,y:sp.anc==="b"?Y+dy*sx*z-hh:sp.anc==="t"?Y+dy*sx*z:Y+dy*sx*z-hh/2,w:ww,h:hh};
   }else if(it.kind==="img"){
     const o=IMG[it.ref];if(!o||!o.ok)return;const pr=proj.imgs[it.ref]||{};let im=o.img;if(o.fr&&o.fr.length){const f=o.fr[Math.floor(t*(pr.fps||8))%o.fr.length];if(f&&f.complete&&f.naturalWidth)im=f;}const hh=(it.h0||300)*k,ww=hh*im.width/im.height;

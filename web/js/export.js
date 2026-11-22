@@ -36,7 +36,7 @@ function init(){
     /* el valor elegido (720, 1080…) es el lado corto del video, según el formato del lienzo */
     const W=asp>=1?Math.round(tier*asp/2)*2:tier,H=asp>=1?tier:Math.round(tier/asp/2)*2;
     const fps=+document.querySelector("input[name=expFps]:checked").value;
-    const px=W*H,bitrate=Math.round((px>=7e6?35e6:px>=3.5e6?16e6:px>=1.9e6?9e6:5e6)*(fps>=50?1.5:1));
+    const px=W*H,bitrate=Math.round((px>=7e6?50e6:px>=3.5e6?24e6:px>=1.9e6?14e6:8e6)*(fps>=50?1.5:1));
     const cfg=await pickConfig(W,H,fps,bitrate);
     if(!cfg){$("expWarn").hidden=false;$("expWarn").textContent="Tu equipo no pudo preparar el codificador de video. Prueba con 720p.";if(window.__onExportErr)__onExportErr("Tu equipo no pudo preparar el codificador de video.");return;}
     const total=Math.round(S.totalSeconds()*fps);
