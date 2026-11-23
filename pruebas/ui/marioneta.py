@@ -26,6 +26,7 @@ async def main():
     await pg.click("#marStop");await pg.wait_for_timeout(300)
     print("al detener, la boca vuelve a cero:",await pg.evaluate("!Studio.serie.proj().mundos[0].items[0].dubLv"))
     print("no queda inclinación pegada:",await pg.evaluate("Studio.serie.proj().mundos[0].items[0].marRot===undefined"))
+    await pg.route("**/*",lambda r: r.abort() if ("jsdelivr" in r.request.url or "googleapis" in r.request.url) else r.continue_())
     await pg.check("#marOk");await pg.click("#marCam");await pg.wait_for_timeout(6000)
     print("cámara sin internet falla con aviso claro:",(await pg.inner_text("#marMsg")).startswith("No pude iniciar"))
     print("y no deja nada activo:",await pg.evaluate("!Marioneta.activa"))
