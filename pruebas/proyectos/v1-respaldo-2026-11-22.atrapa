@@ -1,0 +1,1 @@
+{"v":3,"nombre":"Mi animación","tipo":"animacion","lienzo":{"fmt":"16:9","base":1080,"fps":30,"mbps":0},"mundo":0,"mundos":[{"nombre":"Escena 1","dur":10,"fondo":{"id":"blanco","color":"#ffffff"},"hora":"","items":[],"cam":{"z0":1,"z1":1,"x0":0,"x1":0},"lineas":[],"efecto":"","trans":"","textos":[]}],"actores":[],"imgs":{}}

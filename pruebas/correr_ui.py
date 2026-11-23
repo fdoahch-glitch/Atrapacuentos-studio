@@ -17,6 +17,7 @@ PRUEBAS = {
     "vestuario.py": ["héroe pone capa y lentes: True", "el vestuario guardado se vuelve a poner: True", "errores: []"],
     "cuello.py": ["la raíz del cuello queda quieta: true", "la punta se curva: true | se curva más al hablar: true"],
     "palabras.py": ["usa los tiempos reales: True", "sin tiempos usa el reparto de siempre: True", "errores: []"],
+    "formato.py": ["proyecto real guardado con el código anterior", "abre y queda en formato nuevo: True", "no lo abre y avisa: True", "guardar y abrir de nuevo da lo mismo: True", "errores: []"],
     "txt.py": ["saludar>caminar>saltarx2", "errores: []"],
     "vistas.py": ["agrandar: 400 -> 800", "vistas: ['perfil']", "errores: []"],
     "expx.py": ["cuadro t=1.25 igual (completo vs tramo): True", "movimiento suave distinto del normal: True", "errores: []"],

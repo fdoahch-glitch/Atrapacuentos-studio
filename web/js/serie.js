@@ -723,13 +723,23 @@ function totalSeconds(){return proj.mundos.reduce((a,m)=>a+(m.dur||6),0);}
 
 /* ---------------- guardar y abrir ---------------- */
 function exportText(){return JSON.stringify(Object.assign({},proj,{audios:window.Dub?Dub.dump():undefined}),strip);}
+/* Versión del formato del proyecto. Sube cada vez que cambia la estructura; MIG[n] convierte de la versión n a la n+1.
+   El número vive en el campo «v» (los proyectos que nunca lo tuvieron se tratan como versión 1; hasta la 3 no se leía). */
+const FORMATO=4;
+const MIG={
+  3:p=>{/* v3 → v4: listas siempre presentes y sin restos de datos temporales */
+    for(const sc of p.mundos||[])for(const it of sc.items||[]){if(it.acc&&!Array.isArray(it.acc))it.acc=[];delete it.dubLv;delete it.dubVis;delete it.dubExpr;delete it.marRot;}
+    if(p.vestuarios&&typeof p.vestuarios!=="object")delete p.vestuarios;}
+};
+function migrar(p){let v=+p.v||1;while(v<FORMATO){if(MIG[v])MIG[v](p);v++;}p.v=FORMATO;return p;}
 async function importText(txt){
   const p=JSON.parse(txt);const au=p.audios;delete p.audios;
   if(!p.mundos||!p.mundos.length)throw new Error("Ese archivo no es una serie.");
+  if((+p.v||1)>FORMATO)throw new Error("Este proyecto lo guardó una versión más nueva de Atrapacuentos Studio (formato "+p.v+"). Actualiza la aplicación para abrirlo sin perder nada.");
   setProj(p);if(window.Dub){Dub.load(au);Dub.restore&&Dub.restore();}if(window.Subs)Subs.restore();changed(true);
 }
 function setProj(p){
-  p.imgs=p.imgs||{};p.actores=p.actores||[];p.mundo=clamp(p.mundo||0,0,p.mundos.length-1);
+  migrar(p);p.imgs=p.imgs||{};p.actores=p.actores||[];p.mundo=clamp(p.mundo||0,0,p.mundos.length-1);
   for(const sc of p.mundos){sc.items=sc.items||[];sc.lineas=sc.lineas||[];sc.cam=sc.cam||{z0:1,z1:1,x0:0,x1:0};sc.dur=sc.dur||10;sc.nombre=sc.nombre||"Escena";}
   if(!p.tipo)p.tipo="serie";p.lienzo=lienzoDe(p);proj=p;Studio.proj=p;IMG={};aplicarLienzo();sel=null;edT=0;undo=[];redo=[];lastSnap=snapshot();loadImgs();$("pNombre").value=p.nombre||"";fullRender();
 }
@@ -818,7 +828,7 @@ let fijo=null;
 const engine={fijar(W,H){fijo={W,H};const c=$("cv");c.width=W;c.height=H;},soltar(){fijo=null;fitCanvas();},get fijo(){return fijo;}};
 function fitCanvas(){const c=$("cv");if(!c||Studio.exporting||fijo)return;const dpr=Math.min(2,window.devicePixelRatio||1)*(window.PrevQ||1),w=Math.max(320,Math.round(c.clientWidth*dpr/2)*2);const h=Math.round(w*UH()/UW());if(c.width!==w||c.height!==h){c.width=w;c.height=h;}}
 function aplicarLienzo(){const f=$("frame");if(!f||!proj)return;const a=UW()/UH();f.style.aspectRatio=UW()+" / "+UH();f.style.setProperty("--asp",a);fitCanvas();}
-const Studio=window.Studio={proj:null,say,refit:()=>{fitCanvas();draw();},seleccion:()=>curItem(),recursos,grabarTrayecto,suavizarTrayecto,borrarTrayecto,grupoN:()=>grupo().length,gotoScene:i=>gotoScene(i),changed:()=>changed(),select:()=>{sel=null;renderProps();draw();},play:()=>play(false),playFrom:t=>play(false,t),get tNow(){return pv.t;},stopPlay:()=>stop(""),exporting:false,
+const Studio=window.Studio={proj:null,FORMATO,migrar,say,refit:()=>{fitCanvas();draw();},seleccion:()=>curItem(),recursos,grabarTrayecto,suavizarTrayecto,borrarTrayecto,grupoN:()=>grupo().length,gotoScene:i=>gotoScene(i),changed:()=>changed(),select:()=>{sel=null;renderProps();draw();},play:()=>play(false),playFrom:t=>play(false,t),get tNow(){return pv.t;},stopPlay:()=>stop(""),exporting:false,
   get placed(){const sc=curScene();return sc?sc.items.filter(i=>i.kind==="actor"):[];},get playing(){return pv.on;},beginExport,cancelExport,totalSeconds,exportText,importText,
   rerender:()=>fullRender(),dim,newProj,setProject:p=>{setProj(p);changed(true);},loadAuto,aplicarLienzo,FMT,BASES,lienzoDe,get serie(){return {proj:()=>proj,defOf,addActor,IMG:()=>IMG,changed,renderLib,uid,loadImgs,say};},foto};
 window.__atr2={engine};
