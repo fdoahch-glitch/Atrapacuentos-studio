@@ -108,7 +108,8 @@ pub fn args_codificador(c: &Codificador, mbps: f32, fps: u32) -> Vec<String> {
     let s = |x: &str| x.to_string();
     match c.id.as_str() {
         id if id.ends_with("_nvenc") => a.extend([s("-preset"), s("p5"), s("-tune"), s("hq"), s("-rc"), s("vbr")]),
-        id if id.ends_with("_amf") => a.extend([s("-quality"), s("quality"), s("-rc"), s("vbr_peak")]),
+        // AMF en "quality" es el modo más lento (en una RX 570 daba ~24 cuadros/s a 1080p60 y el resto del proceso esperaba); "balanced" es el punto medio de AMD.
+        id if id.ends_with("_amf") => a.extend([s("-quality"), s("balanced"), s("-rc"), s("vbr_peak")]),
         id if id.ends_with("_qsv") => a.extend([s("-preset"), s("slower")]),
         "libx264" | "libx265" => a.extend([s("-preset"), s("medium")]),
         _ => {}
