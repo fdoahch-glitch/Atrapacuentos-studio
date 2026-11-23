@@ -53,7 +53,13 @@ function tab(k,silencio){
   if(silencio)return;
   if(k==="crear"){const r=Q("#rail .rb");r&&r.click();}
 }
-function buscar(){const q=$("q");if(!q)return;const r=Q("#rail .rb");r&&r.click();q.focus();q.select();}
+function buscar(){
+  const m=ventana(`<h2>🔎 Buscar recursos</h2><input id="busQ" type="text" placeholder="Escribe: árbol, bosque, niña, dino…" style="width:100%;background:#12141c;border:1px solid #343a58;color:#fff;border-radius:9px;padding:9px;font-size:14px"><div id="busR" style="margin-top:10px"></div>`);
+  const q=Q("#busQ",m),R=Q("#busR",m);q.focus();
+  const pinta=()=>{const L=Studio.recursos(q.value);R.innerHTML=!q.value.trim()?'<p style="opacity:.7">Busca en fondos, personajes, decoración y tus imágenes a la vez.</p>':L.length?L.map((x,i)=>`<div class="fila" style="align-items:center"><span>${esc(x.n)} <small style="opacity:.6">· ${x.tipo}</small></span><button data-i="${i}">Agregar</button></div>`).join(""):"<p>No encontré nada con ese nombre.</p>";
+    QA("[data-i]",R).forEach(b=>b.onclick=()=>{L[+b.dataset.i].ir();m.remove();});};
+  q.oninput=pinta;q.onkeydown=e=>{if(e.key==="Enter"){const b=Q("[data-i]",R);b&&b.click();}};pinta();
+}
 
 /* ---------- modo Simple / Avanzado ---------- */
 const AVANZADO=/fotogramas clave|física|cortes de cámara|poses y ciclos|aspecto|colores|animar el fondo|la cámara sigue|curvas/i;

@@ -319,6 +319,14 @@ function addDeco(id,x,y){
   const yy=y!=null?y:(sp.cat==="cielo"?(id==="arcoiris"?430:150):sp.anc==="t"?0:610+Math.round(Math.random()*60));
   addAt({kind:"deco",ref:id,x:x!=null?x:Math.round(UW()*.15+Math.random()*UW()*.7),y:yy,s:1,d:DEPTH[id]!=null?DEPTH[id]:55,mov:sp.mov||""});
 }
+/* 🔎 buscador global: fondos, personajes, decoración y tus imágenes, todo en una sola búsqueda */
+function recursos(t){t=(t||"").toLowerCase().trim();if(!t)return [];const r=[],ok=n=>String(n||"").toLowerCase().includes(t);
+  for(const b of A.BG)if(ok(b.n))r.push({tipo:"Fondo",n:b.n,ir:()=>{curScene().fondo={id:b.id};changed();draw();say("Fondo: "+b.n);}});
+  for(const [id,pre] of Object.entries(A.HUM_PRE))if(ok(pre.n))r.push({tipo:"Personaje",n:pre.n,ir:()=>addActor("hum:"+id,pre.n.split(" ")[0])});
+  if(ok("dino con niño"))r.push({tipo:"Personaje",n:"Dino con niño",ir:()=>addActor("dino_nino","Dino y niño")});
+  for(const sp of A.SP)if(ok(sp.n)||ok(sp.id))r.push({tipo:"Decoración",n:sp.n||sp.id,ir:()=>addDeco(sp.id)});
+  for(const [id,o] of Object.entries(proj.imgs||{}))if(ok(o.n))r.push({tipo:o.tipo==="fondo"?"Mi fondo":"Mi imagen",n:o.n,ir:()=>{if(o.tipo==="fondo"){curScene().fondo={img:id};changed();draw();}else addImg(id);}});
+  return r.slice(0,80);}
 function addImg(id,x,y){addAt({kind:"img",ref:id,x:x||UW()/2,y:y||620,s:1,d:55,h0:300});}
 function renderLib(){
   const rl=$("rail");rl.innerHTML="";
@@ -714,7 +722,7 @@ let fijo=null;
 const engine={fijar(W,H){fijo={W,H};const c=$("cv");c.width=W;c.height=H;},soltar(){fijo=null;fitCanvas();},get fijo(){return fijo;}};
 function fitCanvas(){const c=$("cv");if(!c||Studio.exporting||fijo)return;const dpr=Math.min(2,window.devicePixelRatio||1),w=Math.max(320,Math.round(c.clientWidth*dpr/2)*2);const h=Math.round(w*UH()/UW());if(c.width!==w||c.height!==h){c.width=w;c.height=h;}}
 function aplicarLienzo(){const f=$("frame");if(!f||!proj)return;const a=UW()/UH();f.style.aspectRatio=UW()+" / "+UH();f.style.setProperty("--asp",a);fitCanvas();}
-const Studio=window.Studio={proj:null,say,seleccion:()=>curItem(),grupoN:()=>grupo().length,gotoScene:i=>gotoScene(i),changed:()=>changed(),select:()=>{sel=null;renderProps();draw();},play:()=>play(false),playFrom:t=>play(false,t),get tNow(){return pv.t;},stopPlay:()=>stop(""),exporting:false,
+const Studio=window.Studio={proj:null,say,seleccion:()=>curItem(),recursos,grupoN:()=>grupo().length,gotoScene:i=>gotoScene(i),changed:()=>changed(),select:()=>{sel=null;renderProps();draw();},play:()=>play(false),playFrom:t=>play(false,t),get tNow(){return pv.t;},stopPlay:()=>stop(""),exporting:false,
   get placed(){const sc=curScene();return sc?sc.items.filter(i=>i.kind==="actor"):[];},get playing(){return pv.on;},beginExport,cancelExport,totalSeconds,exportText,importText,
   rerender:()=>fullRender(),dim,newProj,setProject:p=>{setProj(p);changed(true);},loadAuto,aplicarLienzo,FMT,BASES,lienzoDe,get serie(){return {proj:()=>proj,defOf,addActor,IMG:()=>IMG,changed,renderLib,uid,loadImgs,say};},foto};
 window.__atr2={engine};
