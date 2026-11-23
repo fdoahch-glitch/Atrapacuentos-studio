@@ -83,7 +83,7 @@ function distribuir(eje){const g=quedan().filter(i=>i._bb);if(g.length<3){say("P
   g.forEach((i,k)=>{const d=a+(b-a)*k/(g.length-1)-pos(i);if(h)i.x=Math.round(i.x+d/z);else i.y=Math.round(i.y+d/z);});
   changed();draw();}
 function alternar(it,que){it[que]=!it[que];if(it[que]&&sel===it.uid&&que==="bloq"){}if(it.oculto&&sel===it.uid){sel=null;msel.clear();}changed();renderProps();draw();}
-function strip(k,v){return(k[0]==="_"||k==="dubLv"||k==="dubVis"||k==="dubExpr")?undefined:v;}
+function strip(k,v){return(k[0]==="_"||k==="marRot"||k==="dubLv"||k==="dubVis"||k==="dubExpr")?undefined:v;}
 function snapshot(){return JSON.stringify(Object.assign({},proj,{imgs:undefined,actores:undefined}),strip);}
 function changed(quiet){
   const s=snapshot();if(s!==lastSnap){undo.push(lastSnap);if(undo.length>60)undo.shift();redo=[];lastSnap=s;}
@@ -217,7 +217,7 @@ const SIL={},mkc=(w,h)=>{const c=document.createElement("canvas");c.width=w;c.he
 /* ✨ entrada y salida de cualquier elemento (personaje, decoración, imagen): aparece y se va con animación */
 const eo=u=>1-Math.pow(1-u,3),eb=u=>{const c=1.70158;return 1+(c+1)*Math.pow(u-1,3)+c*Math.pow(u-1,2);};
 function entSal(it,t,P){
-  if(!it.ent&&!it.sal&&!it.resp)return P;const Q=Object.assign({},P);let a=1;
+  if(!it.ent&&!it.sal&&!it.resp&&!it.marRot)return P;const Q=Object.assign({},P);let a=1;
   if(it.ent){const t0=it.ent_t||0,d=Math.max(.15,it.ent_d||.8);
     if(t<t0)a=0;else if(t<t0+d){const u=(t-t0)/d,e=eo(u);
       switch(it.ent){case"aparecer":a=e;break;case"subir":a=e;Q.y+=(1-e)*160;break;case"caer":a=Math.min(1,u*3);Q.y-=(1-eb(u))*420;break;
@@ -230,6 +230,7 @@ function entSal(it,t,P){
   if(it.resp){/* 🫁 respirar / mecer: crece y se encoge un poco y se inclina apenas, sin tocar los huesos */
     const A=it.resp===2?2:1,ph=hash(it.uid||"x")%9;
     Q.s=(Q.s||1)*(1+.014*A*Math.sin(Math.PI*2*.27*t+ph));Q.r=(Q.r||0)+.014*A*Math.sin(Math.PI*2*.19*t+ph*1.7);}
+  if(it.marRot)Q.r=(Q.r||0)+it.marRot;
   Q.op=(Q.op==null?1:Q.op)*a;return Q;
 }
 function drawItemIn(g,sc,it,t,cam,sx,opt){
@@ -446,6 +447,7 @@ function itemPanel(P,it){
        <div class="sub" style="font-size:11px;opacity:.7;margin:2px 0 4px">Una pose se suma a lo que ya hace (caminar, hablar). Se pone en el tiempo donde esté la barra.</div>
        <div class="btns">${Object.entries(Object.assign({},window.Poses?Poses.PRE:{},proj.poses||{})).map(([id,p])=>`<button data-po="${id}">${p.n}</button>`).join("")}</div>
        <div class="btns"><button id="poNew" class="pri">✏ Crear pose nueva</button>${Object.keys(proj.poses||{}).length?`<button id="poDel">🗑 Borrar mis poses</button>`:""}</div>
+       ${it.kind==="actor"?`<div class="btns"><button id="pMar" title="Tu voz (y tu cara, si quieres) manejan al personaje en vivo">🎭 Marioneta en vivo (micrófono / cámara)</button></div>`:""}
        ${row("🫁 Respirar / mecer",`<select id="pResp"><option value="0" ${!it.resp?"selected":""}>No</option><option value="1" ${it.resp===1?"selected":""}>Suave</option><option value="2" ${it.resp===2?"selected":""}>Fuerte</option></select>`)}
        ${row("Cómo camina",`<select id="pCi">${Object.entries(GAITS).map(([k,v])=>`<option value="${k}" ${(it.ciclo||"normal")===k?"selected":""}>${v.n}</option>`).join("")}${Object.entries(proj.ciclos||{}).map(([k,v])=>`<option value="${k}" ${it.ciclo===k?"selected":""}>${v.n}</option>`).join("")}</select>`)}
        <div class="btns"><button id="ciEd">🚶 Ajustar / crear ciclo</button></div></div>
@@ -504,6 +506,7 @@ function itemPanel(P,it){
   P.querySelectorAll("[data-po]").forEach(b=>b.onclick=()=>{it.acc=it.acc||[];it.acc.push({k:"pose:"+b.dataset.po,t0:Math.round(edT*10)/10});changed();renderProps();draw();say("Pose puesta. Ajusta su mezcla con ⚙.");});
   bind(P,"#poNew","onclick",()=>window.Poses&&Poses.editarPose(it));bind(P,"#ciEd","onclick",()=>window.Poses&&Poses.editarCiclo(it));
   bind(P,"#poDel","onclick",()=>{if(confirm("¿Borrar todas tus poses guardadas?")){const used=new Set(Object.keys(proj.poses||{}));for(const w of proj.mundos)for(const o of w.items)if(o.acc)o.acc=o.acc.filter(a=>!(a.k.startsWith("pose:")&&used.has(a.k.slice(5))));delete proj.poses;changed();renderProps();draw();}});
+  bind(P,"#pMar","onclick",()=>window.Marioneta&&Marioneta.abrir());
   bind(P,"#pResp","onchange",e=>{const v=+e.target.value;if(v)it.resp=v;else delete it.resp;changed();draw();});
   bind(P,"#pCi","onchange",e=>{if(e.target.value==="normal")delete it.ciclo;else it.ciclo=e.target.value;changed();draw();});
   bind(P,"#kCrv","onclick",()=>window.Curvas&&Curvas.abrir(it));

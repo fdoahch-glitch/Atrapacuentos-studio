@@ -11,6 +11,13 @@ Nada existente fue eliminado ni simplificado; los proyectos antiguos siguen abri
 - **Fase 6:** actualizaciones por GitHub con aviso, diagnóstico del equipo, reporte voluntario, pruebas de interfaz en CI, publicación por etiqueta, firma opcional.
 - **Fase 7:** luz de foco, viento, confeti/cenizas/relámpagos, guías de composición, flujo macOS experimental manual (no afecta Windows).
 
+## Mejoras posteriores (2026-11-23)
+- Medidores de tiempo en la exportación (captura, lectura GPU, envío, cola llena): el mensaje final muestra «Tiempos: …». Sin probar en la app de escritorio. Primera exportación 1080p60 real en Windows: 77 s de video en 4,4 min con h264_amf.
+- Boca que sigue las letras de cada palabra cuando no hay voz grabada (con voz, ya seguía el audio).
+- Acción «Girar» (frente ↔ perfil, o dar vuelta si no hay vista de perfil). El 3/4 es el momento intermedio del giro, no un dibujo propio.
+- «Respirar / mecer» para cualquier elemento (suave o fuerte).
+- Marioneta en vivo: el micrófono mueve la boca (probado con micrófono simulado). La cámara es experimental: baja un modelo de ~4 MB con permiso; NO probada con cámara ni modelo real. No graba la actuación, solo la muestra en vivo.
+
 ## Pruebas
 - 12 de 12 pruebas de interfaz (`python3 pruebas/correr_ui.py`), más pruebas Rust del núcleo y de la app real vía tauri-driver (Linux).
 

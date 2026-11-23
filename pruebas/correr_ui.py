@@ -13,6 +13,7 @@ PRUEBAS = {
     "animal_ui.py": ["huesos: cuerpo,cola,cabeza,mandibula,muslo,canilla,muslo,canilla", "mira: -1", "errores: []"],
     "giro.py": ["se angosta a mitad del giro: True", "vuelve a ensancharse: True", "errores: []"],
     "respirar.py": ["sin respirar queda quieto: True", "respirar mueve el cuerpo: True", "errores: []"],
+    "marioneta.py": ["el micrófono mueve la boca: True", "al detener, la boca vuelve a cero: True", "cámara sin internet falla con aviso claro: True", "y no deja nada activo: True", "errores: []"],
     "txt.py": ["saludar>caminar>saltarx2", "errores: []"],
     "vistas.py": ["agrandar: 400 -> 800", "vistas: ['perfil']", "errores: []"],
     "expx.py": ["cuadro t=1.25 igual (completo vs tramo): True", "movimiento suave distinto del normal: True", "errores: []"],
