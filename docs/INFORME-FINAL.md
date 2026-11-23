@@ -42,3 +42,9 @@ Nada existente fue eliminado ni simplificado; los proyectos antiguos siguen abri
 1. Revisar GitHub Actions (build de Windows).
 2. Correr el diagnóstico (Ayuda) y una exportación 1080p60; enviar el texto "tardó X s…".
 3. Probar con tus dinosaurios reales en el Taller.
+
+## Robustez y orden interno (nov 2026)
+- Proyectos: número de versión (v=4) y cadena de migración; versión futura se rechaza con aviso claro. Prueba `formato.py` con un proyecto real del respaldo.
+- Rust: los bloqueos dañados se recuperan (`bloquear`); FFmpeg se cierra solo si la exportación se abandona; una exportación nueva cierra la vieja; el video a medias se borra si falla o se cancela. 4 pruebas nuevas (20 en total), incluida una exportación que falla a medias.
+- Seguridad: política CSP en `tauri.conf.json` (recursos propios; solo jsdelivr/storage.googleapis para el modelo de cara, que exige autorización con tamaño visible). Las pruebas de interfaz corren bajo la misma política. **No probado dentro de la ventana real de Tauri en Windows**: si algo no carga, la causa probable es la CSP.
+- `serie.js` partido por etapas: etapa 1 sacó `serie_base.js` (utilidades, tablas, migración) y `serie_motor.js` (movimiento y física). Quedan dibujo, propiedades y ratón, que comparten estado y requieren un objeto de contexto común; se hará en etapas con las 19 pruebas de interfaz después de cada una.
