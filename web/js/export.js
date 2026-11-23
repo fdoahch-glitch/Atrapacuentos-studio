@@ -67,13 +67,14 @@ function init(){
     const lector=Nativo.lector?Nativo.lector(W,H):null;
     let rgbaCtx=null;const leerRgba=()=>{if(!rgbaCtx){const c2=document.createElement("canvas");c2.width=W;c2.height=H;rgbaCtx=c2.getContext("2d",{willReadFrequently:true});}rgbaCtx.drawImage(tmp,0,0);return Promise.resolve(new Uint8Array(rgbaCtx.getImageData(0,0,W,H).data.buffer));};
     const cola=[];let bombeando=null,err=null,n=0;
-    const bombear=()=>bombeando||(bombeando=(async()=>{try{while(cola.length&&!err){await Nativo.cuadro(await cola.shift());}}catch(e){err=e;}bombeando=null;})());
+    const M={t0:performance.now(),cap:0,envio:0,lect:0,llena:0,cuadros:0};
+    const bombear=()=>bombeando||(bombeando=(async()=>{try{while(cola.length&&!err){const t1=performance.now();const b=await cola.shift();const t2=performance.now();M.lect+=t2-t1;await Nativo.cuadro(b);M.envio+=performance.now()-t2;M.cuadros++;}}catch(e){err=e;}bombeando=null;})());
     const ex={fps,cancelled:false,
-      skip(){return !err&&(cola.length>=4||(lector&&lector.pendientes>=lector.capacidad));},
+      skip(){const l=!err&&(cola.length>=4||(lector&&lector.pendientes>=lector.capacidad));if(l)M.llena++;return l;},
       capture(){
-        if(err||ex.cancelled)return;
+        if(err||ex.cancelled)return;const tc=performance.now();
         g.drawImage(cv,0,0,W,H);if(window.Fx)Fx.draw(g,W,H);if(window.Dub)Dub.drawSub(g,W,H);
-        cola.push(lector?lector.leer(tmp):leerRgba());bombear();n++;
+        cola.push(lector?lector.leer(tmp):leerRgba());bombear();n++;M.cap+=performance.now()-tc;
         const u=Math.min(1,n/total);$("expBar").style.width=(u*100).toFixed(1)+"%";if(window.__onExportProg)__onExportProg(u,n,total,fps);
         $("expTxt").textContent="Creando video con "+(info.gpu?info.marca:"la CPU")+"… "+Math.round(u*100)+"%  ("+fmt(n/fps)+" de "+fmt(total/fps)+")";
       },
@@ -88,6 +89,9 @@ function init(){
           $("expVid").removeAttribute("src");$("expVid").hidden=true;
           const dl=$("expDl");dl.textContent="📂 Mostrar en la carpeta";dl.removeAttribute("download");dl.href="#";dl.onclick=ev=>{ev.preventDefault();Nativo.mostrar(salida);};
           $("expRes").textContent="¡Listo! "+W+"×"+H+" · "+fps+" cuadros/s · "+fmt(n/fps)+" · "+(bytes/1048576).toFixed(1)+" MB · "+(info.gpu?"codificado con la GPU: "+info.marca:"codificado con la CPU")+" ("+info.codificador+")"+(maestra?" · con copia maestra":"")+(audio?" · con voz":(noAudioMsg?" · "+noAudioMsg:""));
+          {const tot=(performance.now()-M.t0)/1000,f=x=>(x/1000).toFixed(1);
+           window.__expMedidas={total:+tot.toFixed(1),captura:+f(M.cap),lectura:+f(M.lect),envio:+f(M.envio),colaLlena:M.llena,cuadros:n,gpuLector:!!lector};
+           $("expRes").textContent+=" · Tiempos: total "+tot.toFixed(1)+" s, captura del cuadro "+f(M.cap)+" s, esperando lectura de la GPU "+f(M.lect)+" s, envío al codificador "+f(M.envio)+" s, cola llena "+M.llena+" veces, lector GPU: "+(lector?"sí":"no")+".";}
           show(false,false,true);if(window.__onExportDone)__onExportDone(null,nm,$("expRes").textContent);
           {const sb=$("expSrtBtn");if(sb){sb.hidden=!(window.Subs&&Subs.cues().length);sb.onclick=()=>Subs.downloadSrt();}}
         }catch(e){
