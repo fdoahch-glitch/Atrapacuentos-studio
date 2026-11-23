@@ -14,6 +14,9 @@ const LIB=[
  acc("saltar","Saltar","⬆","Un salto con los brazos arriba","saltar"),
  {id:"rebotar",n:"Rebotar",e:"🏀",d:"Botes que se van haciendo más chicos. Sirve para cualquier elemento.",dur:()=>1.4,aplicar:(it,t0)=>{
    const y0=S().posAt(it,t0).y,A=[0,-90,0,-48,0,-20,0],T=[0,.3,.6,.8,1,1.15,1.3];T.forEach((dt,i)=>kf(it,t0+dt,{y:Math.round(y0+A[i]),e:i%2?"salida":"entrada"}));}},
+ {id:"girar",n:"Girar (frente ↔ perfil)",e:"🔄",d:"El personaje se angosta, cambia de vista y se ensancha. Cada vez alterna: de frente a de lado, y de vuelta.",dur:()=>1.2,aplicar:(it,t0)=>{
+   if(it.kind==="actor"){it.acc=it.acc||[];it.acc.push({k:"girar",t0:Math.round(t0*10)/10});}
+   }},
  {id:"girar_cabeza",n:"Girar la cabeza",e:"🙆",d:"Mira a un lado y al otro. En otros elementos se mece.",dur:()=>2.4,aplicar:(it,t0)=>{
    if(it.kind==="actor"){it.acc=it.acc||[];it.acc.push({k:"girar_cabeza",t0:Math.round(t0*10)/10});}
    else{const r0=S().posAt(it,t0).r||0;[[0,0],[.4,.35],[1.2,-.35],[2,0]].forEach(([dt,a])=>kf(it,t0+dt,{r:r0+a*.5,e:"suave"}));}}},
@@ -31,7 +34,7 @@ const LIB=[
  acc("senalar","Señalar","👉","Señala hacia adelante","señalar")
 ];
 /* ---- texto a movimiento: entiende frases simples en español y arma la secuencia con los movimientos de arriba ---- */
-const PAL=[["senalar",/senal|apunt|muestr/],["saludar",/salud|hola|chao|despid/],["saltar",/salt|brinc/],["rebotar",/rebot|bote/],["girar_cabeza",/gira.*cabeza|mira.*(lado|alrededor)|voltea/],
+const PAL=[["girar",/da(r|\s)?\s*(la\s*)?vuelta|gira(r|\b)(?!.*cabeza)|se\s*voltea|se\s*da\s*vuelta/],["senalar",/senal|apunt|muestr/],["saludar",/salud|hola|chao|despid/],["saltar",/salt|brinc/],["rebotar",/rebot|bote/],["girar_cabeza",/gira.*cabeza|mira.*(lado|alrededor)|voltea/],
   ["correr",/corr|huy|escap/],["caminar",/camin|avanz|pasea|\bentra|llega|\bsale|\bva\b|\bir\b/],["comer",/\bcom(e|er|en|iendo)\b|mastic|devor/],["asustarse",/asust|susto|miedo|sobresalt/],
   ["esperar",/esper|impacient/],["hablar",/habl|cuent|dice|conversa|platic/],["bailar",/bail|dans/],["reir",/r[ie]e|risa|carcaj|re[ií]r/],["pensar",/pens|pienso|piensa|piensan|medit|reflexion|duda/]];
 const NUM={un:1,una:1,uno:1,dos:2,tres:3,cuatro:4,cinco:5};

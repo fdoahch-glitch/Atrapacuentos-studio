@@ -217,7 +217,7 @@ const SIL={},mkc=(w,h)=>{const c=document.createElement("canvas");c.width=w;c.he
 /* ✨ entrada y salida de cualquier elemento (personaje, decoración, imagen): aparece y se va con animación */
 const eo=u=>1-Math.pow(1-u,3),eb=u=>{const c=1.70158;return 1+(c+1)*Math.pow(u-1,3)+c*Math.pow(u-1,2);};
 function entSal(it,t,P){
-  if(!it.ent&&!it.sal)return P;const Q=Object.assign({},P);let a=1;
+  if(!it.ent&&!it.sal&&!it.resp)return P;const Q=Object.assign({},P);let a=1;
   if(it.ent){const t0=it.ent_t||0,d=Math.max(.15,it.ent_d||.8);
     if(t<t0)a=0;else if(t<t0+d){const u=(t-t0)/d,e=eo(u);
       switch(it.ent){case"aparecer":a=e;break;case"subir":a=e;Q.y+=(1-e)*160;break;case"caer":a=Math.min(1,u*3);Q.y-=(1-eb(u))*420;break;
@@ -227,6 +227,9 @@ function entSal(it,t,P){
     if(t>=t0+d)a=0;else if(t>=t0){const u=(t-t0)/d,e=u*u;
       switch(it.sal){case"aparecer":a*=1-u;break;case"bajar":a*=1-u;Q.y+=e*160;break;case"zoom":a*=1-u;Q.s=(Q.s||1)*(1-.85*e);break;
         case"izq":a*=1-e;Q.x-=e*520;break;case"der":a*=1-e;Q.x+=e*520;break;case"subir":a*=1-u;Q.y-=e*220;break;}}}
+  if(it.resp){/* 🫁 respirar / mecer: crece y se encoge un poco y se inclina apenas, sin tocar los huesos */
+    const A=it.resp===2?2:1,ph=hash(it.uid||"x")%9;
+    Q.s=(Q.s||1)*(1+.014*A*Math.sin(Math.PI*2*.27*t+ph));Q.r=(Q.r||0)+.014*A*Math.sin(Math.PI*2*.19*t+ph*1.7);}
   Q.op=(Q.op==null?1:Q.op)*a;return Q;
 }
 function drawItemIn(g,sc,it,t,cam,sx,opt){
@@ -238,11 +241,17 @@ function drawItemIn(g,sc,it,t,cam,sx,opt){
   if(it.kind==="actor"){
     const def=defOf(it);if(!def)return;
     const gk=def.esc*k;
-    const fl=(it.flip?-1:1)*P.dir;
+    let fl=(it.flip?-1:1)*P.dir;
     let wk=P.walk;if(it.go){const a=it.go.t0||0,b=Math.max(a+.1,it.go.t1||a+3);wk*=clamp(Math.min(t-a,b-t)/.4,0,1);}
     const acts=actsAt(it,t,sc);let aim=null;
     for(const a of acts)if(a.k==="señalar"&&a.tgt){const dx=(a.tgt.x-P.x)*pf*0+(a.tgt.x-P.x),dy=(a.tgt.y-(P.y-(def.h*(def.esc||1)*(it.s||1)*.55)));const L=Math.hypot(dx,dy)||1;aim=[dx/L*fl,dy/L];}
-    const vista=def.vistas&&wk>.12?"perfil":"";
+    /* 🔄 giro: el personaje se angosta, cambia de vista (frente↔perfil, o se da vuelta si no tiene perfil) y se ensancha; cada «Girar» alterna */
+    let giroSq=1,giroPerfil=false;
+    {const gs=(it.acc||[]).filter(a=>a.k==="girar").map(a=>({t0:a.t0,d:a.dur||Rig.ACC.girar.d})).sort((a,b)=>a.t0-b.t0);
+     let gn=0,gu=null;for(const a of gs){if(t>=a.t0+a.d)gn++;else if(t>=a.t0)gu=(t-a.t0)/a.d;}
+     let par=gn%2;if(gu!=null){if(gu<.5)giroSq=Math.max(.06,Math.cos(gu*Math.PI));else{par=(gn+1)%2;giroSq=Math.max(.06,Math.sin((gu-.5)*Math.PI));}}
+     if(def.vistas&&def.vistas.perfil)giroPerfil=!!par;else if(par)fl=-fl;}
+    const vista=def.vistas&&(wk>.12||giroPerfil)?"perfil":"";
     const f=def.feet,wd=def.w*gk,ht=def.h*gk;
     {const lx=sc.hora==="tarde"?.55:sc.hora==="noche"?.12:.12,sw=wd*(.34+Math.abs(lx)*.5),sh=Math.max(6*sx,wd*.05),al=(sc.sombra==="suave"?1:.55)*(sc.hora==="noche"?.16:.3),cx=X+lx*wd*.35*(it.flip?-1:1)*0+lx*wd*.3,gr=g.createRadialGradient(cx,Y+3*sx,0,cx,Y+3*sx,sw);
       gr.addColorStop(0,"rgba(15,35,20,"+al+")");gr.addColorStop(.6,"rgba(15,35,20,"+(al*.7).toFixed(3)+")");gr.addColorStop(1,"rgba(15,35,20,0)");
@@ -251,7 +260,7 @@ function drawItemIn(g,sc,it,t,cam,sx,opt){
     if(sc.sombra!=="suave"){
       const Wc=g.canvas.width,Hc=g.canvas.height,M=g.getTransform();SIL.a=SIL.a&&SIL.a.width===Wc&&SIL.a.height===Hc?SIL.a:mkc(Wc,Hc);SIL.b=SIL.b&&SIL.b.width===Wc&&SIL.b.height===Hc?SIL.b:mkc(Wc,Hc);
       const og=SIL.a.getContext("2d");og.setTransform(1,0,0,1,0,0);og.clearRect(0,0,Wc,Hc);og.setTransform(M);og.globalAlpha=g.globalAlpha;
-      Rig.draw(og,def,RO);og.setTransform(1,0,0,1,0,0);og.globalAlpha=1;
+      if(giroSq<1){og.save();og.translate(X,0);og.scale(giroSq,1);og.translate(-X,0);Rig.draw(og,def,RO);og.restore();}else Rig.draw(og,def,RO);og.setTransform(1,0,0,1,0,0);og.globalAlpha=1;
       const tg=SIL.b.getContext("2d");tg.setTransform(1,0,0,1,0,0);tg.globalCompositeOperation="source-over";tg.clearRect(0,0,Wc,Hc);tg.drawImage(SIL.a,0,0);
       tg.globalCompositeOperation="source-in";tg.fillStyle=sc.hora==="noche"?"#0a1020":"#0c1c12";tg.fillRect(0,0,Wc,Hc);
       const q0=M.transformPoint(new DOMPoint(X,Y)),q1=M.transformPoint(new DOMPoint(X,Y-ht)),gr2=tg.createLinearGradient(q0.x,q0.y,q1.x,q1.y);gr2.addColorStop(0,"rgba(0,0,0,1)");gr2.addColorStop(1,"rgba(0,0,0,.2)");
@@ -260,7 +269,7 @@ function drawItemIn(g,sc,it,t,cam,sx,opt){
       const Sm=new DOMMatrix([1,0,-lk[0],lk[1],0,0]),T2=M.multiply(new DOMMatrix().translate(X,Y+2*sx)).multiply(Sm).multiply(new DOMMatrix().translate(-X,-(Y+2*sx))).multiply(M.inverse());
       g.save();g.setTransform(T2);g.globalAlpha=g.globalAlpha*lk[2];g.filter="blur("+(2.2*sx).toFixed(1)+"px)";g.drawImage(SIL.b,0,0);g.restore();
       g.save();g.setTransform(1,0,0,1,0,0);g.drawImage(SIL.a,0,0);g.restore();
-    }else Rig.draw(g,def,RO);
+    }else if(giroSq<1){g.save();g.translate(X,0);g.scale(giroSq,1);g.translate(-X,0);Rig.draw(g,def,RO);g.restore();}else Rig.draw(g,def,RO);
     const x0=fl>0?X-f[0]*gk:X-(def.w-f[0])*gk;bb={x:x0,y:Y-f[1]*gk,w:wd,h:ht};
   }else if(it.kind==="deco"){
     const sp=SPD[it.ref];if(!sp)return;const mv=it.mov||"";let dx=0,dy=0,rot=0,sc2=1;const ph=hash(it.uid)%100/10;
@@ -424,7 +433,7 @@ function itemPanel(P,it){
       <div class="btns"><button id="gOff" class="danger">Que se quede quieto</button></div>`:
       `<div class="btns"><button id="gOn" class="pri">🚶 Que camine hasta otro punto</button></div><div class="sub" style="font-size:11px;opacity:.65">Si no camina, respira y mueve la boca cuando habla.</div>`}</div>`;
     if(it.kind==="actor"){
-      const AN={saludar:"👋 Saludar",señalar:"👉 Señalar",saltar:"⬆ Saltar",bailar:"💃 Bailar",asustarse:"😱 Asustarse",reír:"😂 Reír",pensar:"🤔 Pensar",esperar:"⏳ Esperar",comer:"🍎 Comer",girar_cabeza:"🙆 Girar la cabeza",hablar:"🗣 Hablar",rebotar:"🏀 Rebotar"};
+      const AN={girar:"🔄 Girar (frente ↔ perfil)",saludar:"👋 Saludar",señalar:"👉 Señalar",saltar:"⬆ Saltar",bailar:"💃 Bailar",asustarse:"😱 Asustarse",reír:"😂 Reír",pensar:"🤔 Pensar",esperar:"⏳ Esperar",comer:"🍎 Comer",girar_cabeza:"🙆 Girar la cabeza",hablar:"🗣 Hablar",rebotar:"🏀 Rebotar"};
       const otros=curScene().items.filter(o=>o.uid!==it.uid);
       h+=`<div class="card"><h4>🎭 Acciones y cara</h4>${row("Cara",`<select id="pEx">${[["","Normal"],["feliz","Feliz"],["triste","Triste"],["sorpresa","Sorprendido"],["enojo","Enojado"]].map(([v,l])=>`<option value="${v}" ${(it.expr||"")===v?"selected":""}>${l}</option>`).join("")}</select>`)}
        ${row("Cara automática",`<label><input type="checkbox" id="pExA" ${it.exprAuto!==false?"checked":""}> según lo que dice</label>`)}
@@ -437,6 +446,7 @@ function itemPanel(P,it){
        <div class="sub" style="font-size:11px;opacity:.7;margin:2px 0 4px">Una pose se suma a lo que ya hace (caminar, hablar). Se pone en el tiempo donde esté la barra.</div>
        <div class="btns">${Object.entries(Object.assign({},window.Poses?Poses.PRE:{},proj.poses||{})).map(([id,p])=>`<button data-po="${id}">${p.n}</button>`).join("")}</div>
        <div class="btns"><button id="poNew" class="pri">✏ Crear pose nueva</button>${Object.keys(proj.poses||{}).length?`<button id="poDel">🗑 Borrar mis poses</button>`:""}</div>
+       ${row("🫁 Respirar / mecer",`<select id="pResp"><option value="0" ${!it.resp?"selected":""}>No</option><option value="1" ${it.resp===1?"selected":""}>Suave</option><option value="2" ${it.resp===2?"selected":""}>Fuerte</option></select>`)}
        ${row("Cómo camina",`<select id="pCi">${Object.entries(GAITS).map(([k,v])=>`<option value="${k}" ${(it.ciclo||"normal")===k?"selected":""}>${v.n}</option>`).join("")}${Object.entries(proj.ciclos||{}).map(([k,v])=>`<option value="${k}" ${it.ciclo===k?"selected":""}>${v.n}</option>`).join("")}</select>`)}
        <div class="btns"><button id="ciEd">🚶 Ajustar / crear ciclo</button></div></div>
       <div class="card"><h4>🔑 Fotogramas clave</h4><div class="sub" style="font-size:11px;opacity:.7;margin-bottom:4px">Mueve la barra de tiempo, arrastra o cambia el tamaño y guarda: se mueve suave entre una pose y otra.</div>
@@ -494,6 +504,7 @@ function itemPanel(P,it){
   P.querySelectorAll("[data-po]").forEach(b=>b.onclick=()=>{it.acc=it.acc||[];it.acc.push({k:"pose:"+b.dataset.po,t0:Math.round(edT*10)/10});changed();renderProps();draw();say("Pose puesta. Ajusta su mezcla con ⚙.");});
   bind(P,"#poNew","onclick",()=>window.Poses&&Poses.editarPose(it));bind(P,"#ciEd","onclick",()=>window.Poses&&Poses.editarCiclo(it));
   bind(P,"#poDel","onclick",()=>{if(confirm("¿Borrar todas tus poses guardadas?")){const used=new Set(Object.keys(proj.poses||{}));for(const w of proj.mundos)for(const o of w.items)if(o.acc)o.acc=o.acc.filter(a=>!(a.k.startsWith("pose:")&&used.has(a.k.slice(5))));delete proj.poses;changed();renderProps();draw();}});
+  bind(P,"#pResp","onchange",e=>{const v=+e.target.value;if(v)it.resp=v;else delete it.resp;changed();draw();});
   bind(P,"#pCi","onchange",e=>{if(e.target.value==="normal")delete it.ciclo;else it.ciclo=e.target.value;changed();draw();});
   bind(P,"#kCrv","onclick",()=>window.Curvas&&Curvas.abrir(it));
   bind(P,"#kAdd","onclick",()=>{const q=posAt(it,edT);setKf(it,edT,{x:Math.round(q.x),y:Math.round(q.y),s:+q.s.toFixed(3)});changed();renderProps();draw();});

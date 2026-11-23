@@ -61,7 +61,7 @@ async function prep(def){
   return def._prom;
 }
 /* ---- acciones rápidas ---- */
-const ACC={saludar:{d:2.6,e:"feliz"},señalar:{d:2.6,e:""},saltar:{d:1,e:"feliz"},bailar:{d:4,e:"feliz"},asustarse:{d:1.8,e:"sorpresa"},reír:{d:2.6,e:"feliz"},pensar:{d:2.8,e:""},esperar:{d:3.2,e:""},comer:{d:3,e:"feliz"},girar_cabeza:{d:2.4,e:""},hablar:{d:3,e:""},rebotar:{d:2,e:"feliz"}};
+const ACC={saludar:{d:2.6,e:"feliz"},señalar:{d:2.6,e:""},saltar:{d:1,e:"feliz"},bailar:{d:4,e:"feliz"},asustarse:{d:1.8,e:"sorpresa"},reír:{d:2.6,e:"feliz"},pensar:{d:2.8,e:""},esperar:{d:3.2,e:""},comer:{d:3,e:"feliz"},girar_cabeza:{d:2.4,e:""},girar:{d:1.2,e:""},hablar:{d:3,e:""},rebotar:{d:2,e:"feliz"}};
 const env=(u,fe,fs)=>{u=clamp(u,0,1);fe=fe==null?.16:Math.max(.001,Math.min(.9,fe));fs=fs==null?.16:Math.max(.001,Math.min(.9,fs));return sm(0,fe,u)*(1-sm(1-fs,1,u));};
 function acciones(def,t,o,P,rt,S){
   for(const ac of o.acts||[]){

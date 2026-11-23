@@ -124,6 +124,24 @@ function exprDeTexto(t){t=String(t||"");if(!t.trim())return "";
   for(const k of ["enojo","triste","sorpresa","feliz"])if(EXPR_PAL[k].test(t))return k;
   if(/[!¡]/.test(t)){const L=t.replace(/[^\p{L}]/gu,"");if(L.length>3&&L===L.toUpperCase())return "enojo";return "sorpresa";}
   return "";}
+/* boca según las letras: sin voz grabada, cada palabra recorre sus letras durante el tiempo que dura */
+const VOC={a:[1,1],e:[3,.62],i:[3,.42],o:[2,.75],u:[2,.5]},CER=/[mbp]/,SIB=/[fvszcxj]/;
+function visTexto(ws,t){
+  let k=-1;for(let i=0;i<ws.length;i++)if(t>=ws[i].t0&&t<ws[i].t1){k=i;break;}
+  if(k<0)return {lv:0,vs:1};
+  const w=ws[k],ch=w.w.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zñ]/g,"");
+  if(!ch)return {lv:.1,vs:1};
+  const f=(t-w.t0)/Math.max(1e-3,w.t1-w.t0),i=Math.min(ch.length-1,Math.floor(f*ch.length)),c=ch[i],fr=f*ch.length-i;
+  let lv,vs;
+  if(VOC[c]){vs=VOC[c][0];lv=VOC[c][1];}
+  else if(CER.test(c)){vs=1;lv=.06;}
+  else if(SIB.test(c)){vs=4;lv=.28;}
+  else{/* otras consonantes: toman la forma de la vocal más cercana */
+    let j=i+1;while(j<ch.length&&!VOC[ch[j]])j++;if(j>=ch.length){j=i-1;while(j>=0&&!VOC[ch[j]])j--;}
+    const v=VOC[ch[j]]||[1,.6];vs=v[0];lv=v[1]*.45;}
+  lv*=.85+.15*Math.sin(fr*Math.PI);
+  return {lv,vs};
+}
 /* cada cuadro: qué línea suena, qué palabra, cuánto abre la boca el que habla */
 function tick(t,w){
   let act=null;
@@ -139,7 +157,7 @@ function tick(t,w){
       if(it){
         let lv,vs=1;
         if(au){if(act.rh&&!au._rh&&window.IA){au.vis=IA.visDeCues(act.rh.map(c=>({start:c[0],end:c[1],value:c[2]})),au.vis.length,Math.max(1,Math.round(au.buf.sampleRate/50)),au.buf.sampleRate);au._rh=1;}const k=Math.floor((t-act.t0+.03)*50);lv=k>=0&&k<au.env.length?au.env[k]:0;vs=au.vis&&k>=0&&k<au.vis.length?au.vis[k]:1;}
-        else{lv=(t>=act._s&&t<=act._e)?(.5+.5*Math.sin(t*14))*(.55+.45*Math.sin(t*5.3)):0;vs=1+Math.floor(t*7)%3;}
+        else{const r=visTexto(ws,t);lv=(t>=act._s&&t<=act._e)?r.lv:0;vs=r.vs;}
         it.dubLv=lv;it.dubVis=vs||1;if(it.exprAuto!==false)it.dubExpr=exprDeTexto(act.txt);
       }
     }
@@ -442,7 +460,7 @@ function cabDone(ln,from){
 function finishRec(){if(rec&&rec.mr&&rec.mr.state==="recording")rec.mr.stop();}
 function cancelRec(){if(!rec)return;rec.cancel=true;clearInterval(rec.iv);rec.timers.forEach(clearTimeout);try{if(rec.mr&&rec.mr.state==="recording")rec.mr.stop();}catch(e){}rec.stream.getTracks().forEach(t=>t.stop());if(rec.stopMeter)rec.stopMeter();rec=null;recId=null;if(S().playing)S().stopPlay();cabHide();if(dlg){dlg.hidden=false;render();}}
 
-window.Dub={exprDeTexto,newId,begin,tick,stop,drawSub,dump,load,restore,mixdown,hasAudio,open:openDlg,lines:w=>lines(w),AUD,ac,setAudio,attach,words,lineEnd,offsetOf,idbPut,pushUndo,style:sub,SUBDEF,state:()=>state};
+window.Dub={visTexto,exprDeTexto,newId,begin,tick,stop,drawSub,dump,load,restore,mixdown,hasAudio,open:openDlg,lines:w=>lines(w),AUD,ac,setAudio,attach,words,lineEnd,offsetOf,idbPut,pushUndo,style:sub,SUBDEF,state:()=>state};
 function init(){$("bDub").onclick=openDlg;restore();}
 if(window.Studio)init();else document.addEventListener("studio-ready",init);
 })();
