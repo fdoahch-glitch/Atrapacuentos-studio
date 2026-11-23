@@ -661,14 +661,28 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function runExport(ex){
   Studio.exporting=true;pv.on=true;pv.exp=ex;sel=null;
   try{
+    let off=0;const D=ex.desde==null?0:ex.desde,Hh=ex.hasta==null?1e12:ex.hasta;
     for(let si=0;si<proj.mundos.length&&!ex.cancelled;si++){
-      proj.mundo=si;const sc=proj.mundos[si];sceneStart(sc,false);
+      const sc=proj.mundos[si],dur0=sc.dur||6;
+      if(off+dur0<=D||off>=Hh){off+=dur0;continue;}   /* escena fuera del tramo */
+      proj.mundo=si;sceneStart(sc,false);
       const n=Math.max(1,Math.round(sc.dur*ex.fps));
       for(let f=0;f<n&&!ex.cancelled;f++){
+        const gt=off+f/ex.fps;if(gt<D-1e-6)continue;if(gt>=Hh-1e-6)break;
         while(ex.skip()&&!ex.cancelled)await sleep(6);
-        const t=f/ex.fps;stepFrame(sc,t);ex.capture();
+        const t=f/ex.fps;
+        if((ex.blur||0)>1){
+          /* movimiento suave: promedio de varios instantes dentro del obturador (la mitad de un cuadro) */
+          const cvEl=$("cv"),acc=ex._acc||(ex._acc=document.createElement("canvas"));if(acc.width!==cvEl.width||acc.height!==cvEl.height){acc.width=cvEl.width;acc.height=cvEl.height;}
+          const ag=acc.getContext("2d"),nb=ex.blur;
+          for(let k=0;k<nb;k++){stepFrame(sc,Math.max(0,t-(nb-1-k)/nb*.5/ex.fps));ag.globalCompositeOperation=k?"source-over":"copy";ag.globalAlpha=k?1/(k+1):1;ag.drawImage(cvEl,0,0);}
+          ag.globalAlpha=1;ag.globalCompositeOperation="source-over";
+          const cg=cvEl.getContext("2d");cg.globalCompositeOperation="copy";cg.drawImage(acc,0,0);cg.globalCompositeOperation="source-over";
+        }else stepFrame(sc,t);
+        ex.capture();
         if(f%6===0)await sleep(0);
       }
+      off+=dur0;
       if(window.Dub)Dub.stop();
     }
   }catch(e){console.error(e);}
@@ -774,9 +788,9 @@ function wire(){
 /* al exportar, el lienzo se dibuja al TAMAÑO FINAL del video (no al de la ventana) */
 let fijo=null;
 const engine={fijar(W,H){fijo={W,H};const c=$("cv");c.width=W;c.height=H;},soltar(){fijo=null;fitCanvas();},get fijo(){return fijo;}};
-function fitCanvas(){const c=$("cv");if(!c||Studio.exporting||fijo)return;const dpr=Math.min(2,window.devicePixelRatio||1),w=Math.max(320,Math.round(c.clientWidth*dpr/2)*2);const h=Math.round(w*UH()/UW());if(c.width!==w||c.height!==h){c.width=w;c.height=h;}}
+function fitCanvas(){const c=$("cv");if(!c||Studio.exporting||fijo)return;const dpr=Math.min(2,window.devicePixelRatio||1)*(window.PrevQ||1),w=Math.max(320,Math.round(c.clientWidth*dpr/2)*2);const h=Math.round(w*UH()/UW());if(c.width!==w||c.height!==h){c.width=w;c.height=h;}}
 function aplicarLienzo(){const f=$("frame");if(!f||!proj)return;const a=UW()/UH();f.style.aspectRatio=UW()+" / "+UH();f.style.setProperty("--asp",a);fitCanvas();}
-const Studio=window.Studio={proj:null,say,seleccion:()=>curItem(),recursos,grabarTrayecto,suavizarTrayecto,borrarTrayecto,grupoN:()=>grupo().length,gotoScene:i=>gotoScene(i),changed:()=>changed(),select:()=>{sel=null;renderProps();draw();},play:()=>play(false),playFrom:t=>play(false,t),get tNow(){return pv.t;},stopPlay:()=>stop(""),exporting:false,
+const Studio=window.Studio={proj:null,say,refit:()=>{fitCanvas();draw();},seleccion:()=>curItem(),recursos,grabarTrayecto,suavizarTrayecto,borrarTrayecto,grupoN:()=>grupo().length,gotoScene:i=>gotoScene(i),changed:()=>changed(),select:()=>{sel=null;renderProps();draw();},play:()=>play(false),playFrom:t=>play(false,t),get tNow(){return pv.t;},stopPlay:()=>stop(""),exporting:false,
   get placed(){const sc=curScene();return sc?sc.items.filter(i=>i.kind==="actor"):[];},get playing(){return pv.on;},beginExport,cancelExport,totalSeconds,exportText,importText,
   rerender:()=>fullRender(),dim,newProj,setProject:p=>{setProj(p);changed(true);},loadAuto,aplicarLienzo,FMT,BASES,lienzoDe,get serie(){return {proj:()=>proj,defOf,addActor,IMG:()=>IMG,changed,renderLib,uid,loadImgs,say};},foto};
 window.__atr2={engine};

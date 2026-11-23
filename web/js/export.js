@@ -50,10 +50,10 @@ function init(){
     const nm=((S.proj.nombre||"mi-cuento").replace(/[^\wáéíóúñÁÉÍÓÚÑ -]/g,"").trim()||"mi-cuento").replace(/\s+/g,"-");
     const salida=await Nativo.elegirVideo(nm);
     if(!salida){show(true,false,false);return;}
-    const total=Math.round(S.totalSeconds()*fps),codec=$("expCodec").value;
+    const total=Math.round(ExportExtra.dur(S.totalSeconds())*fps),codec=$("expCodec").value;
     let audio=null,noAudioMsg="";
     if(window.Dub&&Dub.hasAudio()){
-      try{const mix=await Dub.mixdown(48000),L=mix.getChannelData(0),R=mix.numberOfChannels>1?mix.getChannelData(1):L,il=new Float32Array(L.length*2);
+      try{const mix=ExportExtra.recorte(await Dub.mixdown(48000)),L=mix.getChannelData(0),R=mix.numberOfChannels>1?mix.getChannelData(1):L,il=new Float32Array(L.length*2);
         for(let i=0;i<L.length;i++){il[2*i]=L[i];il[2*i+1]=R[i];}
         audio=await Nativo.guardarAudio(48000,2,il);}catch(e){noAudioMsg="No pude preparar el audio; el video saldrá sin voz.";}
     }
@@ -61,9 +61,9 @@ function init(){
     let info;
     try{info=await Nativo.iniciar({w:W,h:H,fps,mbps:mb||0,codec,salida,audio,maestra,duracion:total/fps});}
     catch(e){$("expWarn").hidden=false;$("expWarn").textContent="No pude iniciar la exportación: "+e;show(true,false,false);busy=false;if(window.__onExportErr)__onExportErr(String(e));return;}
-    const cv=$("cv"),eng=A.engine;eng.fijar(W,H);
+    const cv=$("cv"),eng=A.engine;eng.fijar(...ExportExtra.size(W,H));
     /* el cuadro se arma en un lienzo de la GPU y un shader lo convierte a YUV sin pasar por la CPU */
-    const tmp=document.createElement("canvas");tmp.width=W;tmp.height=H;const g=tmp.getContext("2d");
+    const tmp=document.createElement("canvas");tmp.width=W;tmp.height=H;const g=tmp.getContext("2d");g.imageSmoothingQuality="high";
     const lector=Nativo.lector?Nativo.lector(W,H):null;
     let rgbaCtx=null;const leerRgba=()=>{if(!rgbaCtx){const c2=document.createElement("canvas");c2.width=W;c2.height=H;rgbaCtx=c2.getContext("2d",{willReadFrequently:true});}rgbaCtx.drawImage(tmp,0,0);return Promise.resolve(new Uint8Array(rgbaCtx.getImageData(0,0,W,H).data.buffer));};
     const cola=[];let bombeando=null,err=null,n=0;
@@ -109,14 +109,14 @@ function init(){
     const dl=$("expDl");dl.onclick=null;dl.textContent="⬇ Descargar MP4";
     const cfg=await pickConfig(W,H,fps,bitrate);
     if(!cfg){$("expWarn").hidden=false;$("expWarn").textContent="Tu equipo no pudo preparar el codificador de video. Prueba con 720p.";if(window.__onExportErr)__onExportErr("Tu equipo no pudo preparar el codificador de video.");return;}
-    const total=Math.round(S.totalSeconds()*fps);
+    const total=Math.round(ExportExtra.dur(S.totalSeconds())*fps);
     /* voces: se mezclan al ritmo del cuento y se guardan como audio AAC dentro del MP4 */
     let mix=null,noAudioMsg="",ac={codec:"mp4a.40.2",mux:"aac",sr:44100};
     if(window.Dub&&Dub.hasAudio()){
       try{
         for(const c of [{codec:"mp4a.40.2",mux:"aac",sr:44100},{codec:"opus",mux:"opus",sr:48000}]){
           const sup=typeof AudioEncoder!=="undefined"?await AudioEncoder.isConfigSupported({codec:c.codec,sampleRate:c.sr,numberOfChannels:2,bitrate:160000}):null;
-          if(sup&&sup.supported){ac=c;mix=await Dub.mixdown(c.sr);break;}
+          if(sup&&sup.supported){ac=c;mix=ExportExtra.recorte(await Dub.mixdown(c.sr));break;}
         }
         if(!mix)noAudioMsg="Este navegador no puede guardar audio en el MP4; saldrá sin voz.";
       }catch(e){noAudioMsg="No pude preparar el audio; el video saldrá sin voz.";}
@@ -126,8 +126,8 @@ function init(){
     const enc=new VideoEncoder({output:(c,m)=>muxer.addVideoChunk(c,m),error:e=>{err=e;}});
     const usoGpu=cfg._gpu;delete cfg._gpu;enc.configure(cfg);
     const cv=$("cv"),eng=A.engine;
-    eng.fijar(W,H);
-    const tmp=document.createElement("canvas");tmp.width=W;tmp.height=H;const g=tmp.getContext("2d");
+    eng.fijar(...ExportExtra.size(W,H));
+    const tmp=document.createElement("canvas");tmp.width=W;tmp.height=H;const g=tmp.getContext("2d");g.imageSmoothingQuality="high";
     let n=0,skipped=false;
     const ex={
       fps,cancelled:false,
