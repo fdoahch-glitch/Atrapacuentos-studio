@@ -111,5 +111,5 @@ function plantilla(id,img){
   const ids={};const out=t.bones.map(([n,role,pv,tip,par],i)=>{const o={id:"b"+(i+1),name:n,role,pv:P(pv),tip:P(tip),parent:null,atras:false,brush:[]};ids[n]=o.id;if(par)o._par=par;return o;});
   out.forEach(o=>{if(o._par){o.parent=ids[o._par];delete o._par;}});return {bones:out,face:t.face};
 }
-window.RigAuto={contours,trace,rdp,chaikin,segment,labels,paintZones,plantilla,TPL};
+window.RigAuto={contours,trace,rdp,rdpClosed,chaikin,segment,labels,paintZones,plantilla,TPL};
 })();

@@ -19,7 +19,7 @@ function render(){
   m.innerHTML=`<div class="mbox" style="max-width:1120px;max-height:94vh;overflow:auto"><h2>✂️ Taller de piezas</h2>
   <p>Convierte tu dibujo en un personaje con partes que se mueven. <b>1</b> Sube la imagen · <b>2</b> dibuja el contorno de cada parte · <b>3</b> marca dónde se dobla · <b>4</b> pruébalo y guárdalo.</p>
   <div style="display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px">
-   <div><div class="btns" style="margin-bottom:8px"><button id="tImg" class="pri">🖼 1. Elegir imagen</button><button id="tNew" ${T.img?"":"disabled"}>✂ 2. Recortar una pieza</button><button id="tAuto" ${T.img?"":"disabled"} class="pri">🦴 Esqueleto automático</button><button id="tClose" ${T.cur.length>2?"":"disabled"}>✔ Cerrar contorno</button><button id="tUndo" ${T.cur.length?"":"disabled"}>↩ Quitar punto</button></div>
+   <div><div class="btns" style="margin-bottom:8px"><button id="tImg" class="pri">🖼 1. Elegir imagen</button><button id="tNew" ${T.img?"":"disabled"}>✂ 2. Recortar una pieza</button><button id="tClic" ${T.img?"":"disabled"} title="Haces clic sobre una parte del dibujo y el programa la recorta por ti">👆 Recorte con un clic</button><button id="tAuto" ${T.img?"":"disabled"} class="pri">🦴 Esqueleto automático</button><button id="tClose" ${T.cur.length>2?"":"disabled"}>✔ Cerrar contorno</button><button id="tUndo" ${T.cur.length?"":"disabled"}>↩ Quitar punto</button></div>
     <div id="tMsg" style="min-height:34px;background:#232740;border-radius:9px;padding:8px 10px;margin-bottom:8px;font-size:12.5px"></div>
     <div style="background:#0e1016;border-radius:10px;padding:6px;text-align:center"><canvas id="tCv" style="max-width:100%;cursor:crosshair;background:repeating-conic-gradient(#2a2f45 0% 25%,#232740 0% 50%) 0 0/20px 20px;border-radius:6px"></canvas></div></div>
    <div><div class="card" id="tSkCard" hidden></div><div class="card"><h4>🧩 Piezas</h4><div id="tList" style="max-height:230px;overflow:auto"></div><div class="sub" style="font-size:11px;opacity:.65">Lo que no recortes queda como <b>cuerpo</b> (la pieza que no se dobla).</div></div>
@@ -29,6 +29,7 @@ function render(){
   <div class="wnav"><span style="opacity:.6;font-size:12px">Consejo: usa una imagen con fondo transparente (PNG). Recorta un poco por dentro del borde.</span><button id="tExit">Cerrar</button></div></div>`;
   $("tExit").onclick=cerrar;$("tImg").onclick=pick;$("tNew").onclick=()=>{T.mode="draw";T.cur=[];msg("Haz clic alrededor de la parte que quieres mover. Ciérralo con «Cerrar contorno», Enter, o haciendo clic en el primer punto.");render2();};
   $("tAuto").onclick=()=>skStart();
+  $("tClic").onclick=()=>{T.mode="clic";T.cur=[];render();msg("👆 Haz <b>clic sobre la parte</b> que quieres separar (un brazo, la cabeza, un sombrero…). Si recorta de más o de menos, cambia la sensibilidad abajo y vuelve a hacer clic.");const c=$("tMsg");c.insertAdjacentHTML("beforeend",`<div style="margin-top:6px;font-size:12px">Sensibilidad: <input id="tTol" type="range" min="10" max="90" value="${T.tol||38}" style="vertical-align:middle"> <span style="opacity:.7">(menos = recorta solo colores casi iguales)</span></div>`);$("tTol").oninput=e=>{T.tol=+e.target.value;};};
   $("tClose").onclick=closePoly;$("tUndo").onclick=()=>{T.cur.pop();render();paint();};
   $("tNom").onchange=e=>{T.nombre=e.target.value||"Mi personaje";};$("tSave").onclick=guardar;
   $("tWalk").onclick=()=>{T.pvMode="walk";mark();};$("tTalk").onclick=()=>{T.pvMode="talk";mark();};
@@ -57,6 +58,11 @@ function setupCv(){
     if(T.mode==="draw"){
       if(T.cur.length>2&&Math.hypot(x-T.cur[0][0],y-T.cur[0][1])*T.k<12){closePoly();return;}
       T.cur.push([x,y]);$("tClose").disabled=T.cur.length<3;$("tUndo").disabled=false;paint();
+    }else if(T.mode==="clic"){
+      const R=Detecta.recorteClic(T.img,x,y,T.tol||38);
+      if(!R.polys.length||R.polys[0].length<3){msg("😕 Ahí no hay dibujo (o es fondo transparente). Prueba en otro punto.");return;}
+      if(R.area>.8){msg("⚠ Eso recortó casi todo el dibujo. Baja la sensibilidad o haz clic en una parte de otro color.");return;}
+      T.draft={pts:R.polys[0],role:"otro",name:"",quitar:true,atras:false,pv:null};T.mode="form";render();
     }else if(T.mode==="pivot"){T.draft.pv=[x,y];finishPiece();}
   };
   cv.oncontextmenu=e=>{e.preventDefault();if(T.mode==="draw")closePoly();};
@@ -84,11 +90,17 @@ function skUI(){
   const c=$("tSkCard");if(!c)return;if(T.mode!=="sk"){c.hidden=true;return;}c.hidden=false;const S=T.sk,B=S.bones;
   c.innerHTML=`<h4>🦴 Esqueleto</h4>
    <div class="btns" style="margin-bottom:6px"><button data-tp="humano">🧍 Persona</button><button data-tp="dino">🦖 Animal de lado</button><button data-tp="vacio">⬜ Vacío</button></div>
+   <div class="btns" style="margin-bottom:6px"><button data-det="1" class="pri" title="Mira la silueta de tu dibujo y coloca los huesos solos">🔍 Detectar partes automáticamente</button></div>
+   <div id="skDet" style="font-size:11.5px;margin-bottom:6px"></div>
    <div class="btns" style="margin-bottom:6px"><button data-tl="move" class="${S.tool==="move"?"on":""}">✋ Mover puntos</button><button data-tl="add" class="${S.tool==="add"?"on":""}">➕ Hueso nuevo</button><button data-tl="brush" class="${S.tool==="brush"?"on":""}">🖌 Reforzar zona</button></div>
    <div style="font-size:12px;margin:4px 0">Mira hacia: <button data-f="1" class="${S.face===1?"on":""}">derecha →</button><button data-f="-1" class="${S.face===-1?"on":""}">← izquierda</button></div>
    <div id="skList" style="max-height:200px;overflow:auto"></div>
    <div class="btns" style="margin-top:8px"><button id="skGo" class="pri" ${B.length>=1?"":"disabled"}>✨ Crear las piezas</button><button id="skX">Cancelar</button></div>
    <div class="sub" style="font-size:11px;opacity:.7;margin-top:6px">Los colores muestran cómo se va a cortar. Mueve los puntos blancos (articulación) y los rombos (punta del hueso). Con 🖌 pintas encima de lo que debe moverse con ese hueso.</div>`;
+  c.querySelectorAll("[data-det]").forEach(b=>b.onclick=()=>{const r=Detecta.detectar(T.img);const d=$("skDet");
+    if(!r.ok){d.innerHTML="⚠ "+r.nota;return;}
+    S.bones=r.bones;S.face=r.face;S.sel=r.bones[0].id;S.det=r;skUI();skCalc();skMsg();});
+  if(S.det&&$("skDet"))$("skDet").innerHTML=`<b>Detecté:</b> ${S.det.hitos.map(h=>h.nombre).join(", ")}.<br>Seguridad: <b>${Math.round(S.det.conf*100)}%</b>. ${S.det.notas.map(esc).join(" ")}<br><span style="opacity:.7">Si algo quedó mal, arrastra los puntos: todo es corregible.</span>`;
   c.querySelectorAll("[data-tp]").forEach(b=>b.onclick=()=>{S.bones=[];skStart(b.dataset.tp);});
   c.querySelectorAll("[data-tl]").forEach(b=>b.onclick=()=>{S.tool=b.dataset.tl;S.pend=null;skUI();skMsg();paint();});
   c.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{S.face=+b.dataset.f;skUI();});
