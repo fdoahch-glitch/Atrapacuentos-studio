@@ -114,11 +114,21 @@ function stop(){
   if(S()&&S().placed)for(const i of S().placed)i.dubLv=null;
   clearSub();
 }
+/* cara automática: se deduce del texto de la línea (palabras y signos); no inventa nada que el texto no diga */
+const EXPR_PAL={
+  triste:/\b(triste|tristeza|llor\w*|pena|lament\w*|perd[ií]\w*|extra[ñn]\w*|sol[oa]s?|adi[oó]s|ya no|nunca m[aá]s)\b/i,
+  enojo:/\b(enoj\w*|rabia|odio|molest\w*|basta|c[aá]llate|fuera|maldit\w*|furios\w*)\b/i,
+  sorpresa:/\b(wow|guau|incre[ií]ble|sorpresa|no puede ser|mira|qu[eé] es|socorro|ayuda|cuidado|oh)\b/i,
+  feliz:/\b(feliz|felices|alegr\w*|gracias|genial|divertid\w*|jaja\w*|amor|me encanta|hurra|bravo|bien|fant[aá]stic\w*|qu[eé] bueno)\b/i};
+function exprDeTexto(t){t=String(t||"");if(!t.trim())return "";
+  for(const k of ["enojo","triste","sorpresa","feliz"])if(EXPR_PAL[k].test(t))return k;
+  if(/[!¡]/.test(t)){const L=t.replace(/[^\p{L}]/gu,"");if(L.length>3&&L===L.toUpperCase())return "enojo";return "sorpresa";}
+  return "";}
 /* cada cuadro: qué línea suena, qué palabra, cuánto abre la boca el que habla */
 function tick(t,w){
   let act=null;
   for(const ln of lines(w)){if(ln.sfx||(!ln.txt&&!AUD[ln.id]))continue;words(ln);if(t>=ln._s-.05&&t<=ln._e+.5){act=ln;}}
-  for(const i of S().placed){i.dubLv=null;i.dubVis=0;}
+  for(const i of S().placed){i.dubLv=null;i.dubVis=0;i.dubExpr="";}
   if(act){
     const au=AUD[act.id],ws=words(act);let idx=-1;
     for(let k=0;k<ws.length;k++)if(t>=ws[k].t0)idx=k;
@@ -130,7 +140,7 @@ function tick(t,w){
         let lv,vs=1;
         if(au){if(act.rh&&!au._rh&&window.IA){au.vis=IA.visDeCues(act.rh.map(c=>({start:c[0],end:c[1],value:c[2]})),au.vis.length,Math.max(1,Math.round(au.buf.sampleRate/50)),au.buf.sampleRate);au._rh=1;}const k=Math.floor((t-act.t0+.03)*50);lv=k>=0&&k<au.env.length?au.env[k]:0;vs=au.vis&&k>=0&&k<au.vis.length?au.vis[k]:1;}
         else{lv=(t>=act._s&&t<=act._e)?(.5+.5*Math.sin(t*14))*(.55+.45*Math.sin(t*5.3)):0;vs=1+Math.floor(t*7)%3;}
-        it.dubLv=lv;it.dubVis=vs||1;
+        it.dubLv=lv;it.dubVis=vs||1;if(it.exprAuto!==false)it.dubExpr=exprDeTexto(act.txt);
       }
     }
   }else state=null;
@@ -432,7 +442,7 @@ function cabDone(ln,from){
 function finishRec(){if(rec&&rec.mr&&rec.mr.state==="recording")rec.mr.stop();}
 function cancelRec(){if(!rec)return;rec.cancel=true;clearInterval(rec.iv);rec.timers.forEach(clearTimeout);try{if(rec.mr&&rec.mr.state==="recording")rec.mr.stop();}catch(e){}rec.stream.getTracks().forEach(t=>t.stop());if(rec.stopMeter)rec.stopMeter();rec=null;recId=null;if(S().playing)S().stopPlay();cabHide();if(dlg){dlg.hidden=false;render();}}
 
-window.Dub={newId,begin,tick,stop,drawSub,dump,load,restore,mixdown,hasAudio,open:openDlg,lines:w=>lines(w),AUD,ac,setAudio,attach,words,lineEnd,offsetOf,idbPut,pushUndo,style:sub,SUBDEF,state:()=>state};
+window.Dub={exprDeTexto,newId,begin,tick,stop,drawSub,dump,load,restore,mixdown,hasAudio,open:openDlg,lines:w=>lines(w),AUD,ac,setAudio,attach,words,lineEnd,offsetOf,idbPut,pushUndo,style:sub,SUBDEF,state:()=>state};
 function init(){$("bDub").onclick=openDlg;restore();}
 if(window.Studio)init();else document.addEventListener("studio-ready",init);
 })();

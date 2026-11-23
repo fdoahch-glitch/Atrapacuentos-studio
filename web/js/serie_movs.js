@@ -53,9 +53,12 @@ function abrir(){
   const objs=S().quedan();if(!objs.length){Studio.say("Primero elige un personaje o elemento en el cuadro.");return;}
   const todos=LIB.concat(propios().map(aplicarPropio)),meta=LIB.concat(propios().map(m=>Object.assign({},m,{propio:true})));
   const hayActor=objs.some(o=>o.kind==="actor"),t0=Math.round(S().getT()*10)/10;
+  const sc=Studio.serie.proj().mundos[Studio.serie.proj().mundo],voz=[];
+  if(window.Dub)for(const ln of Dub.lines(sc)){if(ln.sfx||!(ln.txt||"").trim())continue;const ws=Dub.words(ln);ws.forEach((w,k)=>{if(k%1===0)voz.push({t:w.t0,txt:`${(ln.txt||"").trim().slice(0,22)}… → «${w.w}» (${w.t0.toFixed(1)} s)`});});}
   const tarj=meta.map((m,i)=>{const off=m.actor&&!hayActor;return `<label class="ia-card" style="${off?"opacity:.4;cursor:not-allowed":""}"><input type="checkbox" data-m="${i}" ${off?"disabled":""} style="float:right"><b>${m.e||"⭐"} ${esc(m.n)}</b><span>${esc(m.d||"")}${off?" (solo personajes)":""}</span>${m.propio?`<br><button data-del="${esc(m.id)}" style="margin-top:4px;font-size:11px">Quitar</button>`:""}</label>`;}).join("");
   const m=ventana(`<h2>🏃 Movimientos</h2><p>Se aplican a <b>${objs.length>1?objs.length+" elementos":"lo elegido"}</b> a partir del segundo <b>${t0}</b> de la barra de tiempo. Marca uno o varios.</p>
   <div class="ia-grid" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">${tarj}</div>
+  ${voz.length?`<p style="margin-top:12px"><b>Empezar en una palabra de la voz</b> <select id="movPal"><option value="">No, usar el segundo ${t0}</option>${voz.map((x,i)=>`<option value="${x.t.toFixed(2)}">${esc(x.txt)}</option>`).join("")}</select></p>`:""}
   <p style="margin-top:12px"><label><input type="radio" name="movOrd" value="seq" checked> Uno tras otro</label> &nbsp; <label><input type="radio" name="movOrd" value="par"> Todos a la vez</label></p>
   <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="movAp" class="go">Aplicar y ver</button><button id="movGu">⭐ Guardar lo que ya hizo este personaje como movimiento…</button><button id="movCe">Cerrar</button></div>`);
   m.querySelector("#movCe").onclick=()=>m.remove();
@@ -63,8 +66,9 @@ function abrir(){
   m.querySelector("#movAp").onclick=()=>{
     const sel=[...m.querySelectorAll("[data-m]:checked")].map(c=>todos[+c.dataset.m]);if(!sel.length){Studio.say("Marca al menos un movimiento.");return;}
     const seq=m.querySelector("[name=movOrd]:checked").value==="seq";
-    for(const it of objs){let t=t0;for(const mv of sel){if(mv.actor&&it.kind!=="actor")continue;mv.aplicar(it,t);if(seq)t+=mv.dur()+.15;}}
-    Studio.changed();window.Serie.renderProps();m.remove();Studio.rerender&&Studio.rerender();Studio.playFrom(t0);Studio.say("Movimiento aplicado. Lo puedes editar en la lista de acciones o en las curvas.");};
+    const pal=m.querySelector("#movPal"),tIni=pal&&pal.value?+pal.value:t0;
+    for(const it of objs){let t=Math.round(tIni*10)/10;for(const mv of sel){if(mv.actor&&it.kind!=="actor")continue;mv.aplicar(it,t);if(seq)t+=mv.dur()+.15;}}
+    Studio.changed();window.Serie.renderProps();m.remove();Studio.rerender&&Studio.rerender();Studio.playFrom(Math.max(0,tIni-.5));Studio.say("Movimiento aplicado. Lo puedes editar en la lista de acciones o en las curvas.");};
   m.querySelector("#movGu").onclick=()=>{
     const it=objs[0];
     const caja=ventana(`<h2>⭐ Guardar movimiento</h2><p>Guarda las acciones y fotogramas de «${esc((it.ficha&&it.ficha.nombre)||"este elemento")}» entre dos momentos.</p>

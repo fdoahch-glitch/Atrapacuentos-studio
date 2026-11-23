@@ -44,7 +44,7 @@ function abrirPlantillas(){
 }
 /* ======================= BIBLIOTECA ======================= */
 const TIPOS={personaje:"🧍 Personajes",escena:"🎞 Escenas",pose:"🤸 Poses",ciclo:"🚶 Ciclos de caminata",imagen:"🖼 Imágenes"};
-const clean=(k,v)=>(k[0]==="_"||k==="dubLv"||k==="dubVis")?undefined:v;
+const clean=(k,v)=>(k[0]==="_"||k==="dubLv"||k==="dubVis"||k==="dubExpr")?undefined:v;
 async function guardarItem(tipo,nombre,data){const it={id:"b"+rid(),tipo,nombre:String(nombre).slice(0,40),fecha:Date.now(),data:JSON.stringify(data,clean)};await tx("biblio","readwrite",s=>s.put(it));return it;}
 async function listar(){const r=await tx("biblio","readonly",s=>s.getAll());return (r||[]).sort((a,b)=>b.fecha-a.fecha);}
 async function borrar(id){await tx("biblio","readwrite",s=>s.delete(id));}

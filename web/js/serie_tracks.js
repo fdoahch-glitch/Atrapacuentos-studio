@@ -6,7 +6,7 @@ const AI={saludar:"👋",señalar:"👉",saltar:"⬆",bailar:"💃",asustarse:"�
 const COL={go:"#4d7cff",acc:"#ff9f43",voz:"#3ecf8e",sfx:"#c084fc",amb:"#38bdf8",kf:"#ffd93d"};
 const CURVES=[["suave","Suave"],["lineal","Recta"],["entrada","Arranca lento"],["salida","Frena al final"],["rebote","Rebote"],["elastico","Elástico"],["retroceso","Se pasa y vuelve"],["paso","Salto brusco"]];
 const LBL=150,RH=30;
-let pps=90,scrollX=0,drawn=false,raf=0,menu=null,selKf=null;
+let pps=90,scrollX=0,drawn=false,raf=0,menu=null,selKf=null,soloSel=false;
 const T={};
 function el(t,c,h){const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;}
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -16,11 +16,21 @@ function build(){
   const body=el("div","trkBody");body.id="trkBody";w.appendChild(body);
   w.insertBefore(Object.assign(el("div","trkTools"),{id:"trkTools"}),body);
   $("trkTools").innerHTML=`<span style="opacity:.7">Zoom</span><input id="trkZ" type="range" min="30" max="260" value="${pps}" style="width:110px"><button id="trkFit">Ajustar</button>
-   <span style="opacity:.6;margin-left:8px">Doble clic en una fila = agregar. Arrastra para mover. Clic derecho = borrar.</span>`;
+   <button id="trkMk" title="Pone una marca con nombre en el momento actual">🚩 Marca</button><button id="trkPrev" title="Ir a la marca anterior">⏮</button><button id="trkNext" title="Ir a la marca siguiente">⏭</button>
+   <button id="trkSolo" title="Muestra solo las filas de lo que tienes elegido">👁 Solo lo elegido</button><button id="trkSelZ" title="Acerca la línea de tiempo a lo que hace lo elegido">🔍 Acercar a lo elegido</button>
+   <span style="opacity:.6;margin-left:8px">Doble clic en una fila = agregar. Arrastra para mover. Clic derecho = borrar. Ctrl + rueda = zoom. Shift + rueda = desplazar.</span>`;
+  $("trkMk").onclick=()=>{const sc=S().curScene();sc.marcas=sc.marcas||[];sc.marcas.push({id:"k"+Date.now().toString(36),t:snap(S().getT()),n:"Marca "+(sc.marcas.length+1)});window.Studio.changed();render();};
+  const salto=d=>{const sc=S().curScene(),ms=(sc.marcas||[]).map(m=>m.t).sort((a,b)=>a-b),t=S().getT(),q=d>0?ms.find(x=>x>t+.05):[...ms].reverse().find(x=>x<t-.05);if(q!=null)S().setT(q);else window.Studio.say("No hay más marcas en esa dirección.");};
+  $("trkPrev").onclick=()=>salto(-1);$("trkNext").onclick=()=>salto(1);
+  $("trkSolo").onclick=()=>{soloSel=!soloSel;$("trkSolo").classList.toggle("on",soloSel);render();};
+  $("trkSelZ").onclick=()=>{const g=S().quedan?S().quedan():[];if(!g.length){window.Studio.say("Elige algo en el cuadro primero.");return;}
+    let a=1e9,b=-1e9;for(const it of g){for(const x of it.acc||[]){const d=x.dur||(window.SerieRig&&SerieRig.ACC[x.k]?SerieRig.ACC[x.k].d:2);a=Math.min(a,x.t0);b=Math.max(b,x.t0+d);}for(const f of it.kf||[]){a=Math.min(a,f.t);b=Math.max(b,f.t);}if(it.go){a=Math.min(a,it.go.t0||0);b=Math.max(b,it.go.t1||(it.go.t0||0)+3);}}
+    if(a>b){window.Studio.say("Lo elegido todavía no tiene movimientos.");return;}
+    const body=$("trkBody");pps=Math.max(30,Math.min(260,(body.clientWidth-LBL-40)/Math.max(.8,b-a+.4)));$("trkZ").value=pps;render();requestAnimationFrame(()=>requestAnimationFrame(()=>{body.scrollLeft=Math.max(0,(a-.2)*pps);}));};
   $("trkZ").oninput=e=>{pps=+e.target.value;render();};
   $("trkFit").onclick=()=>{const b=$("trkBody");pps=Math.max(30,Math.min(260,(b.clientWidth-LBL-30)/Math.max(2,S().curScene().dur)));$("trkZ").value=pps;scrollX=0;render();};
   body.addEventListener("scroll",()=>{scrollX=body.scrollLeft;});
-  body.addEventListener("wheel",e=>{if(e.ctrlKey){e.preventDefault();pps=Math.max(30,Math.min(260,pps*(e.deltaY<0?1.12:.89)));$("trkZ").value=pps;render();}},{passive:false});
+  body.addEventListener("wheel",e=>{if(e.shiftKey&&!e.ctrlKey){e.preventDefault();body.scrollLeft+=e.deltaY||e.deltaX;return;}if(e.ctrlKey){e.preventDefault();pps=Math.max(30,Math.min(260,pps*(e.deltaY<0?1.12:.89)));$("trkZ").value=pps;render();}},{passive:false});
   const sp=el("div","splh");w.parentNode.insertBefore(sp,w);
   sp.onpointerdown=e=>{sp.setPointerCapture(e.pointerId);const y0=e.clientY,h0=w.getBoundingClientRect().height;sp.onpointermove=ev=>{w.style.height=Math.max(110,Math.min(innerHeight-260,h0-(ev.clientY-y0)))+"px";};sp.onpointerup=()=>{sp.onpointermove=null;window.dispatchEvent(new Event("resize"));};};
   document.addEventListener("pointerdown",e=>{if(menu&&!menu.contains(e.target))closeMenu();},true);
@@ -47,8 +57,20 @@ function doRender(){
   const rr=el("div","trkArea");rr.style.width=W+"px";
   const step=pps>=140?.5:pps>=60?1:2;for(let t=0;t<=dur+.001;t+=step){const k=el("div","tick");k.style.left=t*pps+"px";k.innerHTML=`<i></i><b>${t%1?t.toFixed(1):t}s</b>`;rr.appendChild(k);}
   const end=el("div","trkEnd");end.style.left=dur*pps+"px";rr.appendChild(end);
+  /* 🚩 marcas con nombre: clic = ir ahí · arrastrar = mover · doble clic = renombrar · clic derecho = quitar */
+  for(const mk of (sc.marcas||[])){
+    const f=el("div","mk");f.style.cssText=`position:absolute;top:0;left:${mk.t*pps}px;height:24px;display:flex;align-items:center;gap:2px;font-size:11px;color:#ffb347;cursor:ew-resize;z-index:3;white-space:nowrap`;
+    f.innerHTML=`<span style="border-left:2px solid #ffb347;height:24px"></span>🚩<span class="mkn" style="max-width:110px;overflow:hidden;text-overflow:ellipsis">${esc(mk.n)}</span>`;
+    f.title=mk.n+" · "+mk.t.toFixed(1)+" s (doble clic: cambiar nombre)";
+    f.onpointerdown=ev=>{ev.stopPropagation();if(ev.target.isContentEditable)return;const x0=ev.clientX,t0=mk.t;let mov=false;f.setPointerCapture(ev.pointerId);
+      f.onpointermove=e2=>{if(Math.abs(e2.clientX-x0)>3)mov=true;if(mov){mk.t=Math.max(0,Math.min(dur,snap(t0+(e2.clientX-x0)/pps)));f.style.left=mk.t*pps+"px";}};
+      f.onpointerup=()=>{f.onpointermove=null;f.onpointerup=null;if(mov){window.Studio.changed();render();}else S().setT(mk.t);};};
+    f.ondblclick=ev=>{ev.stopPropagation();const n=f.querySelector(".mkn");n.contentEditable="true";n.style.cursor="text";n.focus();const r=document.createRange();r.selectNodeContents(n);const g=getSelection();g.removeAllRanges();g.addRange(r);
+      const fin=()=>{mk.n=(n.textContent||"").trim().slice(0,40)||mk.n;n.contentEditable="false";window.Studio.changed();render();};n.onblur=fin;n.onkeydown=e2=>{if(e2.key==="Enter"){e2.preventDefault();n.blur();}e2.stopPropagation();};};
+    f.oncontextmenu=ev=>{ev.preventDefault();ev.stopPropagation();showMenu(ev.clientX,ev.clientY,[{t:"Quitar marca «"+mk.n+"»",f:()=>{sc.marcas=sc.marcas.filter(x=>x!==mk);window.Studio.changed();render();}}]);};
+    rr.appendChild(f);}
   ru.appendChild(rr);grid.appendChild(ru);
-  const seek=ev=>{const r=rr.getBoundingClientRect();S().setT(snap((ev.clientX-r.left)/pps));};
+  const seek=ev=>{const r=rr.getBoundingClientRect();let t=snap((ev.clientX-r.left)/pps);for(const mk of (sc.marcas||[]))if(Math.abs(mk.t-t)*pps<8){t=mk.t;break;}S().setT(t);};
   rr.onpointerdown=ev=>{rr.setPointerCapture(ev.pointerId);seek(ev);rr.onpointermove=seek;rr.onpointerup=()=>{rr.onpointermove=null;};};
   /* cámara */
   const cr=row("🎥 Cámara",W,null);const c=sc.cam||{};
@@ -60,7 +82,8 @@ function doRender(){
   cr.area.appendChild(cb);
   /* personajes y objetos */
   const L=window.Dub?Dub.lines(sc):[];
-  const vis=sc.items.filter(i=>i.kind==='actor'||S().sel===i.uid||(i.kf&&i.kf.length)).sort((a,b)=>(b.kind==='actor')-(a.kind==='actor'));
+  const elegidos=soloSel&&S().quedan?new Set(S().quedan().map(i=>i.uid)):null;
+  const vis=sc.items.filter(i=>elegidos&&elegidos.size?elegidos.has(i.uid):(i.kind==='actor'||S().sel===i.uid||(i.kf&&i.kf.length))).sort((a,b)=>(b.kind==='actor')-(a.kind==='actor'));
   for(const it of vis){
     const r=row((it.kind==="actor"?"🎭 ":it.kind==="deco"?"🌳 ":"🖼 ")+esc(S().itemName(it)),W,it);
     if(S().sel===it.uid)r.row.classList.add("sel");
