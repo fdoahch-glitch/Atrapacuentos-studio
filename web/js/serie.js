@@ -39,6 +39,29 @@ const msel=new Set();let clip=[],pegados=0;
 function grupo(){if(!sel||msel.size<2||!msel.has(sel))return [];return curScene().items.filter(i=>msel.has(i.uid)&&!i.oculto);}
 function quedan(){const g=grupo();return g.length?g:(curItem()?[curItem()]:[]);}
 function camZ(){return camAt(curScene(),0).z||1;}
+/* 🛤 trayectorias: grabar el ratón, dibujar un camino y editar los puntos en el cuadro */
+let rec=null;
+const w2s=(x,y,cam,pf)=>({x:(x-cam.x*pf-UW()/2)*cam.z+UW()/2,y:(y-360)*cam.z+360});
+const s2w=(px,py,cam,pf)=>({x:Math.round((px-UW()/2)/cam.z+UW()/2+cam.x*pf),y:Math.round((py-360)/cam.z+360)});
+function puntosKf(it){return (it.kf||[]).filter(f=>f.x!=null&&f.y!=null);}
+function rdp(P,eps){if(P.length<3)return P;let mx=0,ix=0;const a=P[0],b=P[P.length-1],dx=b.x-a.x,dy=b.y-a.y,L=Math.hypot(dx,dy)||1;
+  for(let i=1;i<P.length-1;i++){const d=Math.abs((P[i].x-a.x)*dy-(P[i].y-a.y)*dx)/L;if(d>mx){mx=d;ix=i;}}
+  if(mx<=eps)return [a,b];return rdp(P.slice(0,ix+1),eps).slice(0,-1).concat(rdp(P.slice(ix),eps));}
+function grabarTrayecto(modo){const it=curItem();if(!it){say("Primero elige un personaje o elemento.");return;}rec={it,modo,t0:edT};say(modo==="dibujar"?"Dibuja el camino con el ratón sobre el cuadro y suelta.":"Arrastra el elemento: lo que hagas se graba tal cual.");$("cv").style.cursor="crosshair";}
+function finTrayecto(pts){
+  const it=rec.it,t0=rec.t0,modo=rec.modo;rec=null;$("cv").style.cursor="";
+  if(pts.length<2){say("El movimiento fue muy corto. Prueba de nuevo.");return;}
+  let P=rdp(pts,5);if(P.length>60)P=rdp(pts,12);
+  let dur;if(modo==="dibujar"){let len=0;const cum=[0];for(let i=1;i<P.length;i++){len+=Math.hypot(P[i].x-P[i-1].x,P[i].y-P[i-1].y);cum.push(len);}dur=Math.max(1,len/260);P.forEach((q,i)=>q.t=len?dur*cum[i]/len:0);}
+  else{dur=Math.min(30,P[P.length-1].t);}
+  it.kf=(it.kf||[]).filter(f=>!((f.x!=null||f.y!=null)&&f.t>=t0-.001&&f.t<=t0+dur+.001));
+  for(const q of P)setKf(it,t0+Math.min(dur,q.t),{x:Math.round(q.x),y:Math.round(q.y),e:"lineal"});
+  changed();renderProps();draw();say(`Camino guardado (${P.length} puntos, ${dur.toFixed(1)} s). Dale ▶ o mueve los puntos naranjas para ajustarlo.`);
+}
+function suavizarTrayecto(){const it=curItem();if(!it)return;const pk=puntosKf(it);if(pk.length<4){say("Ya es un camino simple.");return;}
+  const P=rdp(pk.map(f=>({x:f.x,y:f.y,t:f.t,f})),14);const keep=new Set(P.map(q=>q.f));
+  it.kf=it.kf.filter(f=>!(f.x!=null&&f.y!=null)||keep.has(f));changed();renderProps();draw();say("Camino suavizado.");}
+function borrarTrayecto(){const it=curItem();if(!it)return;it.kf=(it.kf||[]).filter(f=>{if(f.x!=null||f.y!=null){delete f.x;delete f.y;}return Object.keys(f).some(k=>k!=="t"&&k!=="e");});if(!it.kf.length)delete it.kf;changed();renderProps();draw();say("Camino borrado.");}
 function copiar(){const g=quedan();if(!g.length)return false;clip=g.map(i=>JSON.parse(JSON.stringify(i,strip)));pegados=0;say(g.length>1?g.length+" elementos copiados.":"Copiado.");return true;}
 function pegar(){if(!clip.length)return false;pegados++;const sc=curScene(),nuevos=[];
   for(const o of clip){const c=JSON.parse(JSON.stringify(o));c.uid=uid();c.x+=36*pegados;c.y+=14*pegados;sc.items.push(c);nuevos.push(c);}
@@ -224,7 +247,7 @@ function drawItemIn(g,sc,it,t,cam,sx,opt){
     {const lx=sc.hora==="tarde"?.55:sc.hora==="noche"?.12:.12,sw=wd*(.34+Math.abs(lx)*.5),sh=Math.max(6*sx,wd*.05),al=(sc.sombra==="suave"?1:.55)*(sc.hora==="noche"?.16:.3),cx=X+lx*wd*.35*(it.flip?-1:1)*0+lx*wd*.3,gr=g.createRadialGradient(cx,Y+3*sx,0,cx,Y+3*sx,sw);
       gr.addColorStop(0,"rgba(15,35,20,"+al+")");gr.addColorStop(.6,"rgba(15,35,20,"+(al*.7).toFixed(3)+")");gr.addColorStop(1,"rgba(15,35,20,0)");
       g.save();g.translate(cx,Y+3*sx);g.scale(1,sh/sw);g.translate(-cx,-(Y+3*sx));g.fillStyle=gr;g.beginPath();g.arc(cx,Y+3*sx,sw,0,TAU);g.fill();g.restore();}
-    const RO={ax:X,ay:Y,s:gk,flip:fl,t:t+hash(it.uid)%7,walk:wk,speak:it.dubLv||0,vis:it.dubVis||0,hz:(it.paso||1)*(gaitOf(it).hz||1),gait:gaitOf(it),run:(it.paso||1)*(gaitOf(it).hz||1)>1.45,stride:(P.speed/(def.esc*(P.s||1)))/((it.paso||1)*(gaitOf(it).hz||1)*((it.paso||1)*(gaitOf(it).hz||1)>1.45?1.8:1)),velFn:tau=>((posAt(it,tau+.03).x-posAt(it,tau-.03).x)/.06)/(def.esc*(P.s||1))*fl*(def.face||1),acts,aim,expr:it.expr||"",vista,fwd:P.vl/200*fl,rot:P.r,seed:hash(it.uid)%5,alpha:g.globalAlpha};
+    const RO={ax:X,ay:Y,s:gk,flip:fl,t:t+hash(it.uid)%7,walk:wk,speak:it.dubLv||0,vis:it.dubVis||0,hz:(it.paso||1)*(gaitOf(it).hz||1),gait:gaitOf(it),run:(it.paso||1)*(gaitOf(it).hz||1)>1.45,stride:(P.speed/(def.esc*(P.s||1)))/((it.paso||1)*(gaitOf(it).hz||1)*((it.paso||1)*(gaitOf(it).hz||1)>1.45?1.8:1)),velFn:tau=>((posAt(it,tau+.03).x-posAt(it,tau-.03).x)/.06)/(def.esc*(P.s||1))*fl*(def.face||1),acts,aim,sec:it.sec,fq:window.FisQ||1,expr:it.expr||"",vista,fwd:P.vl/200*fl,rot:P.r,seed:hash(it.uid)%5,alpha:g.globalAlpha};
     if(sc.sombra!=="suave"){
       const Wc=g.canvas.width,Hc=g.canvas.height,M=g.getTransform();SIL.a=SIL.a&&SIL.a.width===Wc&&SIL.a.height===Hc?SIL.a:mkc(Wc,Hc);SIL.b=SIL.b&&SIL.b.width===Wc&&SIL.b.height===Hc?SIL.b:mkc(Wc,Hc);
       const og=SIL.a.getContext("2d");og.setTransform(1,0,0,1,0,0);og.clearRect(0,0,Wc,Hc);og.setTransform(M);og.globalAlpha=g.globalAlpha;
@@ -281,6 +304,9 @@ function frame(g,sc,t,opt){
     for(const o of grupo()){if(o===it||!o._bb)continue;const b=o._bb;g.save();g.strokeStyle="#ffd9a0";g.lineWidth=2*sx;g.setLineDash([4*sx,4*sx]);g.strokeRect(b.x*sx,b.y*sx,b.w*sx,b.h*sx);g.restore();}
     if(it&&it._bb){const b=it._bb;g.save();g.strokeStyle="#ffb347";g.lineWidth=2*sx;g.setLineDash([8*sx,6*sx]);g.strokeRect(b.x*sx,b.y*sx,b.w*sx,b.h*sx);g.setLineDash([]);
       g.fillStyle="#ffb347";g.fillRect((b.x+b.w)*sx-7*sx,(b.y+b.h)*sx-7*sx,14*sx,14*sx);
+      {const pk=puntosKf(it);if(pk.length){const pf=pfOf(it.d),D=sc.dur||6;g.strokeStyle="#ffb347";g.lineWidth=2.5*sx;g.setLineDash([2*sx,6*sx]);g.beginPath();
+        for(let tt=0;tt<=D+1e-6;tt+=Math.max(.05,D/120)){const q=posAt(it,tt),w=w2s(q.x,q.y,cam,pf);tt?g.lineTo(w.x*sx,w.y*sx):g.moveTo(w.x*sx,w.y*sx);}g.stroke();g.setLineDash([]);
+        for(const f of pk){const w=w2s(f.x,f.y,cam,pf);g.fillStyle="#ffb347";g.strokeStyle="#1a1305";g.lineWidth=2*sx;g.beginPath();g.arc(w.x*sx,w.y*sx,8*sx,0,TAU);g.fill();g.stroke();}}}
       if(it.go){const pf=pfOf(it.d),z=cam.z,fx=((it.go.x1-cam.x*pf-UW()/2)*z+UW()/2)*sx,fy=((it.go.y1-360)*z+360)*sx;
         const p0=itemPos(it,0);g.strokeStyle="#7a5cff";g.lineWidth=3*sx;g.setLineDash([4*sx,6*sx]);g.beginPath();g.moveTo(b.X*sx,b.Y*sx);g.lineTo(fx,fy);g.stroke();g.setLineDash([]);
         g.fillStyle="#7a5cff";g.beginPath();g.arc(fx,fy,11*sx,0,TAU);g.fill();g.fillStyle="#fff";g.font="bold "+(13*sx)+"px sans-serif";g.textAlign="center";g.fillText("➜",fx,fy+5*sx);void p0;}
@@ -398,7 +424,7 @@ function itemPanel(P,it){
       <div class="btns"><button id="gOff" class="danger">Que se quede quieto</button></div>`:
       `<div class="btns"><button id="gOn" class="pri">🚶 Que camine hasta otro punto</button></div><div class="sub" style="font-size:11px;opacity:.65">Si no camina, respira y mueve la boca cuando habla.</div>`}</div>`;
     if(it.kind==="actor"){
-      const AN={saludar:"👋 Saludar",señalar:"👉 Señalar",saltar:"⬆ Saltar",bailar:"💃 Bailar",asustarse:"😱 Asustarse",reír:"😂 Reír",pensar:"🤔 Pensar"};
+      const AN={saludar:"👋 Saludar",señalar:"👉 Señalar",saltar:"⬆ Saltar",bailar:"💃 Bailar",asustarse:"😱 Asustarse",reír:"😂 Reír",pensar:"🤔 Pensar",esperar:"⏳ Esperar",comer:"🍎 Comer",girar_cabeza:"🙆 Girar la cabeza",hablar:"🗣 Hablar",rebotar:"🏀 Rebotar"};
       const otros=curScene().items.filter(o=>o.uid!==it.uid);
       h+=`<div class="card"><h4>🎭 Acciones y cara</h4>${row("Cara",`<select id="pEx">${[["","Normal"],["feliz","Feliz"],["triste","Triste"],["sorpresa","Sorprendido"],["enojo","Enojado"]].map(([v,l])=>`<option value="${v}" ${(it.expr||"")===v?"selected":""}>${l}</option>`).join("")}</select>`)}
        <div class="sub" style="font-size:11px;opacity:.7;margin:2px 0 4px">Pon la barra de tiempo donde quieras y toca una acción:</div>
@@ -430,6 +456,16 @@ function itemPanel(P,it){
   if(it.kind==="deco"||it.kind==="img"){h+=`<div class="card"><h4>🌬 Movimiento</h4>${row("Se mueve",`<select id="pMv">${[["","Quieto"],["mecer","Mecerse con el viento"],["flotar","Flotar"],["girar","Girar"],["pulso","Latir"],["volar","Volar suave"],["aletear","Aletear y revolotear"],["parpadear","Parpadear (fuego)"]].map(([v,l])=>`<option value="${v}" ${(it.mov||"")===v?"selected":""}>${l}</option>`).join("")}</select>`)}</div>`;}
   {const f=it.fis||{};h+=`<div class="card"><h4>⚙ Física</h4>${row("Qué hace",`<select id="fiK"><option value="">Nada</option><option value="rebota" ${f.k==="rebota"?"selected":""}>Cae y rebota</option><option value="rueda" ${f.k==="rueda"?"selected":""}>Rueda por el suelo</option></select>`)}
    ${it.fis?`${row("Empieza (s)",`<input id="fiT" type="number" step=".5" min="0" value="${f.t0||0}" style="width:70px">`)}${row("Suelo (altura)",`<input id="fiS" type="number" step="10" value="${f.suelo||650}" style="width:80px">`)}${row("Empujón →",`<input id="fiV" type="range" min="-600" max="600" value="${f.vx||0}">`)}${f.k==="rebota"?row("Rebote",`<input id="fiE" type="range" min="0" max="90" value="${Math.round((f.e==null?.5:f.e)*100)}">`):""}`:`<div class="sub" style="font-size:11px;opacity:.7">Coloca el objeto en lo alto y elige «Cae y rebota».</div>`}</div>`;}
+  if(def){
+    const ROLF=/oreja|colgante|cola|pelo|ropa|capa|bufanda|falda|cinta/i,cand=def.piezas.filter(p=>(p.m&&p.m.phys)||ROLF.test(p.rol||"")||ROLF.test(p.n||"")),otras=def.piezas.filter(p=>!cand.includes(p)&&!/ojo|boca|ceja|cuerpo/.test(p.rol||""));
+    const sec=it.sec||{};
+    h+=`<div class="card"><h4>🎀 Colas, pelo y ropa (física suave)</h4><div class="sub" style="font-size:11px;opacity:.7;margin:0 0 4px">Las piezas que cuelgan se mueven con retraso cuando el personaje camina o salta. Es el mismo resultado en la vista previa y en el MP4.</div>
+     ${cand.length?cand.map(p=>{const o=sec[p.n]||{},base=Object.assign({k:55,c:5.5,g:1,w:.25,max:.7},(p.m&&p.m.phys)||{}),v=k=>o[k]!=null?o[k]:base[k],on=o.on!==false&&!!((p.m&&p.m.phys)||o.on);
+      return `<div style="margin:6px 0;padding:6px;background:#12142a;border-radius:8px"><label><input type="checkbox" data-fo="${esc(p.n)}" ${on?"checked":""}> <b>${esc(p.n)}</b></label>
+       <div class="mez" ${on?"":'style="opacity:.45"'}>${[["k","Rigidez",10,120,1],["c","Freno",1,14,.5],["g","Fuerza",0,2,.05],["w","Viento",0,1,.05],["max","Límite",.1,1.2,.05]].map(([k,l,a,b,st])=>`<label>${l} <input type="range" data-fk="${k}" data-fp="${esc(p.n)}" min="${a}" max="${b}" step="${st}" value="${v(k)}"><b>${(+v(k)).toFixed(st<1?2:0)}</b></label>`).join("")}</div></div>`;}).join(""):'<div class="sub">Este personaje no tiene piezas que cuelguen.</div>'}
+     ${otras.length?`<div class="row"><span>Agregar a otra pieza</span><select id="foNueva"><option value="">Elegir…</option>${otras.map(p=>`<option value="${esc(p.n)}">${esc(p.n)}</option>`).join("")}</select></div>`:""}</div>`;
+  }
+  h+=`<div class="card"><h4>🛤 Trayectoria</h4><div class="sub" style="font-size:11px;opacity:.7;margin:0 0 4px">Pon la barra de tiempo donde empieza el movimiento. Después edita los puntos naranjas: arrástralos, o clic derecho para quitarlos.</div><div class="btns"><button id="trRec" title="Arrastra el elemento y se graba con su velocidad real">⏺ Grabar moviendo</button><button id="trDib" title="Dibuja el camino; el elemento lo recorre a velocidad pareja">✏️ Dibujar camino</button></div>${puntosKf(it).length?`<div class="btns" style="margin-top:4px"><button id="trSua">〰 Suavizar</button><button id="trBor" class="danger">🗑 Borrar camino</button></div><div class="sub" style="font-size:11px;opacity:.7">${puntosKf(it).length} puntos</div>`:""}</div>`;
   h+=`<div class="card"><div class="btns"><button id="pDup">⧉ Duplicar</button><button id="pBloq">${it.bloq?"🔓 Desbloquear":"🔒 Bloquear"}</button><button id="pOcu">👁 Ocultar</button><button id="pDel" class="danger">🗑 Quitar</button></div></div>`;
   P.innerHTML=h;
   const ch=()=>changed(),setv=(k,v)=>{it[k]=v;draw();};
@@ -466,6 +502,11 @@ function itemPanel(P,it){
   bind(P,"#eS","onchange",e=>{if(e.target.value){it.sal=e.target.value;if(!(it.sal_t>0))it.sal_t=Math.max(1,(curScene().dur||6)-1);}else delete it.sal;ch();renderProps();draw();});
   for(const [id,k,fn] of [["#eNt","ent_t",v=>Math.max(0,+v||0)],["#eNd","ent_d",v=>Math.max(.2,+v||.8)],["#eSt","sal_t",v=>Math.max(0,+v||0)],["#eSd","sal_d",v=>Math.max(.2,+v||.8)]])bind(P,id,"onchange",e=>{it[k]=fn(e.target.value);ch();draw();});
   bind(P,"#pMv","onchange",e=>{it.mov=e.target.value;ch();});
+  P.querySelectorAll("[data-fo]").forEach(c=>c.onchange=()=>{it.sec=it.sec||{};const n=c.dataset.fo,o=it.sec[n]=it.sec[n]||{};o.on=c.checked;changed();renderProps();draw();});
+  P.querySelectorAll("[data-fk]").forEach(r=>r.oninput=()=>{it.sec=it.sec||{};const n=r.dataset.fp,o=it.sec[n]=it.sec[n]||{};o[r.dataset.fk]=+r.value;if(o.on==null)o.on=true;r.nextElementSibling.textContent=(+r.value).toFixed(+r.step<1?2:0);draw();});
+  P.querySelectorAll("[data-fk]").forEach(r=>r.onchange=()=>changed());
+  bind(P,"#foNueva","onchange",e=>{if(!e.target.value)return;it.sec=it.sec||{};it.sec[e.target.value]={on:true};changed();renderProps();draw();});
+  bind(P,"#trRec","onclick",()=>grabarTrayecto("grabar"));bind(P,"#trDib","onclick",()=>grabarTrayecto("dibujar"));bind(P,"#trSua","onclick",suavizarTrayecto);bind(P,"#trBor","onclick",borrarTrayecto);
   bind(P,"#pBloq","onclick",()=>alternar(it,"bloq"));bind(P,"#pOcu","onclick",()=>alternar(it,"oculto"));
   bind(P,"#pDup","onclick",()=>{const c=JSON.parse(JSON.stringify(it,strip));c.uid=uid();c.x+=40;c.y+=10;curScene().items.push(c);sel=c.uid;ch();renderProps();});
   bind(P,"#pDel","onclick",delItem);void def;
@@ -674,7 +715,9 @@ function wire(){
   const cv=$("cv");
   cv.addEventListener("pointerdown",e=>{
     if(pv.on)return;const p=ptr(e);const c0=curItem();if(edT>0&&!(c0&&c0.kf)){edT=0;syncScrub();draw();}
+    if(rec){const cam0=camAt(curScene(),0),it=rec.it,b0=posAt(it,rec.t0);drag={m:"rec",it,p0:p,b0,cz:cam0.z,t0:performance.now(),pts:[{t:0,x:b0.x,y:b0.y}]};cv.setPointerCapture(e.pointerId);return;}
     const it0=curItem();
+    if(it0&&it0.kf){const cam1=camAt(curScene(),0),pf1=pfOf(it0.d);for(const f of puntosKf(it0)){const w=w2s(f.x,f.y,cam1,pf1);if(Math.hypot(p.x-w.x,p.y-w.y)<14){drag={m:"kf",it:it0,f,cam:cam1,pf:pf1};cv.setPointerCapture(e.pointerId);return;}}}
     if(it0&&it0._bb){const b=it0._bb;if(Math.abs(p.x-(b.x+b.w))<16&&Math.abs(p.y-(b.y+b.h))<16){drag={m:"s",it:it0,s0:it0.s||1,d0:Math.hypot(p.x-b.X,p.y-b.Y)||1};cv.setPointerCapture(e.pointerId);return;}
       if(it0.go){const cam=camAt(curScene(),0),pf=pfOf(it0.d),fx=((it0.go.x1-cam.x*pf-UW()/2)*cam.z+UW()/2),fy=((it0.go.y1-360)*cam.z+360);if(Math.hypot(p.x-fx,p.y-fy)<20){drag={m:"g",it:it0,z:cam.z};cv.setPointerCapture(e.pointerId);return;}}}
     const it=hit(p);
@@ -688,13 +731,19 @@ function wire(){
   });
   cv.addEventListener("pointermove",e=>{
     if(!drag)return;const p=ptr(e),it=drag.it,cam=camAt(curScene(),0);
+    if(drag.m==="rec"){const x=drag.b0.x+(p.x-drag.p0.x)/drag.cz,y=drag.b0.y+(p.y-drag.p0.y)/drag.cz,t=(performance.now()-drag.t0)/1000,L=drag.pts[drag.pts.length-1];
+      if(Math.hypot(x-L.x,y-L.y)>=2)drag.pts.push({t,x,y});draw();
+      const g=$("cv").getContext("2d"),sx=$("cv").width/UW();g.save();g.strokeStyle="#ffb347";g.lineWidth=3*sx;g.beginPath();drag.pts.forEach((q,i)=>{const w=w2s(q.x,q.y,camAt(curScene(),0),pfOf(it.d));i?g.lineTo(w.x*sx,w.y*sx):g.moveTo(w.x*sx,w.y*sx);});g.stroke();g.restore();return;}
+    if(drag.m==="kf"){const q=s2w(p.x,p.y,drag.cam,drag.pf);drag.f.x=q.x;drag.f.y=q.y;draw();return;}
     if(drag.m==="m"){const nx=Math.round(drag.ix+(p.x-drag.x)/cam.z),ny=Math.round(drag.iy+(p.y-drag.y)/cam.z);if(it.kf&&edT>0)setKf(it,edT,{x:nx,y:ny});else{it.x=nx;it.y=ny;}
       for(const g of drag.gr||[]){const gx=Math.round(g.ix+(p.x-drag.x)/cam.z),gy=Math.round(g.iy+(p.y-drag.y)/cam.z);if(g.it.kf&&edT>0)setKf(g.it,edT,{x:gx,y:gy});else{g.it.x=gx;g.it.y=gy;}}}
     else if(drag.m==="s"){const b=it._bb;it.s=clamp(drag.s0*(Math.hypot(p.x-b.X,p.y-b.Y)/drag.d0),.1,4);}
     else if(drag.m==="g"){const pf=pfOf(it.d);it.go.x1=Math.round((p.x-UW()/2)/cam.z+UW()/2+cam.x*pf);it.go.y1=Math.round((p.y-360)/cam.z+360);}
     draw();
   });
-  const up=()=>{if(drag){const m=drag.m;drag=null;changed();if(m==="s")renderProps();}};
+  const up=()=>{if(drag){const m=drag.m,d=drag;drag=null;if(m==="rec"){finTrayecto(d.pts);return;}changed();if(m==="s")renderProps();}};
+  cv.addEventListener("contextmenu",e=>{const it=curItem();if(!it||!it.kf)return;const p=ptr(e),cam=camAt(curScene(),0),pf=pfOf(it.d);
+    for(const f of puntosKf(it)){const w=w2s(f.x,f.y,cam,pf);if(Math.hypot(p.x-w.x,p.y-w.y)<14){e.preventDefault();delete f.x;delete f.y;it.kf=it.kf.filter(k=>Object.keys(k).some(q=>q!=="t"&&q!=="e"));changed();renderProps();draw();say("Punto quitado.");return;}}});
   cv.addEventListener("pointerup",up);cv.addEventListener("pointercancel",up);
   const fr=$("frame");
   fr.addEventListener("dragover",e=>{e.preventDefault();fr.classList.add("over");});fr.addEventListener("dragleave",()=>fr.classList.remove("over"));
@@ -722,11 +771,11 @@ let fijo=null;
 const engine={fijar(W,H){fijo={W,H};const c=$("cv");c.width=W;c.height=H;},soltar(){fijo=null;fitCanvas();},get fijo(){return fijo;}};
 function fitCanvas(){const c=$("cv");if(!c||Studio.exporting||fijo)return;const dpr=Math.min(2,window.devicePixelRatio||1),w=Math.max(320,Math.round(c.clientWidth*dpr/2)*2);const h=Math.round(w*UH()/UW());if(c.width!==w||c.height!==h){c.width=w;c.height=h;}}
 function aplicarLienzo(){const f=$("frame");if(!f||!proj)return;const a=UW()/UH();f.style.aspectRatio=UW()+" / "+UH();f.style.setProperty("--asp",a);fitCanvas();}
-const Studio=window.Studio={proj:null,say,seleccion:()=>curItem(),recursos,grupoN:()=>grupo().length,gotoScene:i=>gotoScene(i),changed:()=>changed(),select:()=>{sel=null;renderProps();draw();},play:()=>play(false),playFrom:t=>play(false,t),get tNow(){return pv.t;},stopPlay:()=>stop(""),exporting:false,
+const Studio=window.Studio={proj:null,say,seleccion:()=>curItem(),recursos,grabarTrayecto,suavizarTrayecto,borrarTrayecto,grupoN:()=>grupo().length,gotoScene:i=>gotoScene(i),changed:()=>changed(),select:()=>{sel=null;renderProps();draw();},play:()=>play(false),playFrom:t=>play(false,t),get tNow(){return pv.t;},stopPlay:()=>stop(""),exporting:false,
   get placed(){const sc=curScene();return sc?sc.items.filter(i=>i.kind==="actor"):[];},get playing(){return pv.on;},beginExport,cancelExport,totalSeconds,exportText,importText,
   rerender:()=>fullRender(),dim,newProj,setProject:p=>{setProj(p);changed(true);},loadAuto,aplicarLienzo,FMT,BASES,lienzoDe,get serie(){return {proj:()=>proj,defOf,addActor,IMG:()=>IMG,changed,renderLib,uid,loadImgs,say};},foto};
 window.__atr2={engine};
-window.Serie={dim,renderTl,renderProps,GAITS,gaitOf,poseOf,easeFn,bez,curScene,setT(t){if(pv.on)return;edT=clamp(t,0,curScene().dur);syncScrub();draw();},select(u){sel=u;renderProps();draw();},get sel(){return sel;},get playing(){return pv.on;},posAt,setKf,EASE,itemName(it){return it.kind==="actor"?(it.ficha&&it.ficha.nombre)||"Personaje":it.kind==="deco"?(SPD[it.ref]||{n:"Decoración"}).n:(proj.imgs[it.ref]||{}).n||"Imagen";},loadImgs,addImg,thumbs,saveAuto,addActorDef(def){proj.actores.push(def);changed();renderLib();say("Personaje guardado en «Mis personajes».");},get proj(){return proj;},changed,renderLib,say,addActor,play,draw,frame,defOf};
+window.Serie={setKf,posAt,getT:()=>edT,curItem,quedan,dim,renderTl,renderProps,GAITS,gaitOf,poseOf,easeFn,bez,curScene,setT(t){if(pv.on)return;edT=clamp(t,0,curScene().dur);syncScrub();draw();},select(u){sel=u;renderProps();draw();},get sel(){return sel;},get playing(){return pv.on;},posAt,setKf,EASE,itemName(it){return it.kind==="actor"?(it.ficha&&it.ficha.nombre)||"Personaje":it.kind==="deco"?(SPD[it.ref]||{n:"Decoración"}).n:(proj.imgs[it.ref]||{}).n||"Imagen";},loadImgs,addImg,thumbs,saveAuto,addActorDef(def){proj.actores.push(def);changed();renderLib();say("Personaje guardado en «Mis personajes».");},get proj(){return proj;},changed,renderLib,say,addActor,play,draw,frame,defOf};
 
 async function init(){
   if(!Rig.ok()){$("status").hidden=false;$("status").textContent="Este navegador no puede usar WebGL: actívalo para ver los personajes.";}

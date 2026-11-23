@@ -40,7 +40,7 @@ function barra(){
   const put=(g,...els)=>els.forEach(e=>e&&Q(`[data-g=${g}]`,gp).appendChild(e));
   const nuevo=(txt,tit,fn)=>{const b=document.createElement("button");b.innerHTML=txt;b.title=tit;b.onclick=fn;return b;};
   put("crear",nuevo("📄 Plantillas","Empieza una escena ya armada",plantillas),nuevo("🎬 Primer vídeo","Te guío paso a paso hasta tener tu primer MP4",()=>guia(true)),nuevo("🔎 Buscar","Busca personajes, fondos y decoración (Ctrl+F)",buscar));
-  put("animar",nuevo("⏱ Pistas","Muestra u oculta la línea de tiempo con pistas",()=>{const w=$("trkWrap");if(w)w.style.display=w.style.display==="none"?"":"none";}));
+  put("animar",nuevo("🏃 Movimientos","Biblioteca de movimientos: saludar, saltar, correr, comer…",()=>window.Movs&&Movs.abrir()),nuevo("🛤 Trayectoria","Graba o dibuja el camino de lo elegido",()=>{const it=Studio.seleccion&&Studio.seleccion();if(!it){say("Elige primero un elemento en el cuadro.");return;}Studio.grabarTrayecto("dibujar");}),nuevo("⏱ Pistas","Muestra u oculta la línea de tiempo con pistas",()=>{const w=$("trkWrap");if(w)w.style.display=w.style.display==="none"?"":"none";}));
   put("voz",$("bDub"),$("bSub"));
   put("exportar",$("bFoto"),$("bExp"));
   QA("[data-tab]",st).forEach(b=>b.onclick=()=>tab(b.dataset.tab));

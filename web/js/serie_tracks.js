@@ -2,7 +2,7 @@
 (function(){
 "use strict";
 const S=()=>window.Serie,$=id=>document.getElementById(id);
-const AI={saludar:"👋",señalar:"👉",saltar:"⬆",bailar:"💃",asustarse:"😱",reír:"😂",pensar:"🤔"};
+const AI={saludar:"👋",señalar:"👉",saltar:"⬆",bailar:"💃",asustarse:"😱",reír:"😂",pensar:"🤔",esperar:"⏳",comer:"🍎",girar_cabeza:"🙆",hablar:"🗣",rebotar:"🏀"};
 const COL={go:"#4d7cff",acc:"#ff9f43",voz:"#3ecf8e",sfx:"#c084fc",amb:"#38bdf8",kf:"#ffd93d"};
 const CURVES=[["suave","Suave"],["lineal","Recta"],["entrada","Arranca lento"],["salida","Frena al final"],["rebote","Rebote"],["elastico","Elástico"],["retroceso","Se pasa y vuelve"],["paso","Salto brusco"]];
 const LBL=150,RH=30;

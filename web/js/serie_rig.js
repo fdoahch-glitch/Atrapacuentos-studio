@@ -61,7 +61,7 @@ async function prep(def){
   return def._prom;
 }
 /* ---- acciones rápidas ---- */
-const ACC={saludar:{d:2.6,e:"feliz"},señalar:{d:2.6,e:""},saltar:{d:1,e:"feliz"},bailar:{d:4,e:"feliz"},asustarse:{d:1.8,e:"sorpresa"},reír:{d:2.6,e:"feliz"},pensar:{d:2.8,e:""}};
+const ACC={saludar:{d:2.6,e:"feliz"},señalar:{d:2.6,e:""},saltar:{d:1,e:"feliz"},bailar:{d:4,e:"feliz"},asustarse:{d:1.8,e:"sorpresa"},reír:{d:2.6,e:"feliz"},pensar:{d:2.8,e:""},esperar:{d:3.2,e:""},comer:{d:3,e:"feliz"},girar_cabeza:{d:2.4,e:""},hablar:{d:3,e:""},rebotar:{d:2,e:"feliz"}};
 const env=(u,fe,fs)=>{u=clamp(u,0,1);fe=fe==null?.16:Math.max(.001,Math.min(.9,fe));fs=fs==null?.16:Math.max(.001,Math.min(.9,fs));return sm(0,fe,u)*(1-sm(1-fs,1,u));};
 function acciones(def,t,o,P,rt,S){
   for(const ac of o.acts||[]){
@@ -82,8 +82,17 @@ function acciones(def,t,o,P,rt,S){
     else if(k==="reír"){rt.dy-=Math.abs(Math.sin(TAU*4.5*tt))*def.h*.012*e;rt.a+=.012*Math.sin(TAU*9*tt)*e;if(head)P[head.n].a-=.13*e;
       S.speak=Math.max(S.speak,.55*e*(.5+.5*Math.abs(Math.sin(TAU*4.5*tt))));S.vis=1;for(const p of arms)P[p.n].a+=out(p)*.08*e*Math.sin(TAU*4.5*tt);}
     else if(k==="pensar"){if(head)P[head.n].a+=.1*e;if(mainArm)P[mainArm.n].a+=out(mainArm)*-.2*e;}
+    else if(k==="esperar"){const sw=Math.sin(TAU*.5*tt);rt.a+=.012*sw*e;if(head)P[head.n].a+=.09*Math.sin(TAU*.4*tt+.6)*e;
+      if(legs[0])P[legs[0].n].a+=.14*Math.max(0,Math.sin(TAU*1.6*tt))*e*out(legs[0]);arms.forEach((p,i)=>{P[p.n].a+=out(p)*(.12+.05*Math.sin(TAU*.7*tt+i))*e;});}
+    else if(k==="comer"){const ch=Math.abs(Math.sin(TAU*2.6*tt));if(mainArm)P[mainArm.n].a+=out(mainArm)*(2.15+.12*ch)*e;if(head)P[head.n].a+=(.05+.05*ch)*e;S.speak=Math.max(S.speak,.4*ch*e);S.vis=1;}
+    else if(k==="girar_cabeza"){if(head)P[head.n].a+=.34*Math.sin(TAU*.75*tt)*e;rt.a+=.012*Math.sin(TAU*.75*tt)*e;}
+    else if(k==="hablar"){const b=.5+.5*Math.abs(Math.sin(TAU*3.1*tt+Math.sin(tt*1.3)*2));S.speak=Math.max(S.speak,.6*e*b);S.vis=Math.max(S.vis,1+Math.floor(b*3.4)%4);
+      if(mainArm)P[mainArm.n].a+=out(mainArm)*(.35+.3*Math.sin(TAU*.9*tt))*e;if(head)P[head.n].a+=.05*Math.sin(TAU*1.1*tt+1)*e;}
+    else if(k==="rebotar"){const j=Math.abs(Math.sin(TAU*1.5*tt/1));rt.dy-=def.h*.07*j*e;for(const p of legs)P[p.n].a+=out(p)*.18*j*e;for(const p of arms)P[p.n].a+=out(p)*.5*j*e;}
   }
 }
+/* física suave por defecto para una pieza (cola, pelo, orejas, ropa): cuelga desde su pivote */
+function fisDef(p){const pv=p.pv||[p.x,p.y],cx=p.x+p.w/2,cy=p.y+p.h/2,d=Math.hypot(cx-pv[0],cy-pv[1])||1;return {r:[(cx-pv[0])/d,(cy-pv[1])/d],k:55,c:5.5,g:1,max:.7,w:.25};}
 /* pose de cada pieza en el instante t */
 function pose(def,t,o){
   const walk=o.walk||0,hz=(o.hz||1)*(o.run?1.8:1),ph=TAU*t*hz,idl=TAU*.45*t,P={};
@@ -112,8 +121,10 @@ function pose(def,t,o){
     const a1=best.a1,kx=hip[0]+L1*Math.cos(a1),ky=hip[1]+L1*Math.sin(a1),a2=Math.atan2(ty-ky,tx-kx);
     const d1=a1-r1;P[p.n].a=d1*wk;P[sh.n].a=((a2-r2)-d1)*wk;}
   /* colgantes con resorte (pelo, orejas, bufanda): se calculan desde el pasado, así el video sale igual siempre */
-  for(const p of def.piezas){const ph2=p.m&&p.m.phys;if(!ph2)continue;
-    const dt=1/90,k=ph2.k||55,c=ph2.c||5.5,g=ph2.g==null?1:ph2.g,mx=ph2.max||.7,r=ph2.r||[0,1],vf=o.velFn,sd=(o.seed||0)*1.7+Array.from(p.n).reduce((a,c)=>a+c.charCodeAt(0),0)%13;let th=0,w=0;
+  for(const p of def.piezas){let ph2=p.m&&p.m.phys;const ov=o.sec&&o.sec[p.n];
+    if(ov){if(ov.on===false)continue;ph2=Object.assign({},ph2||fisDef(p),ov);}
+    if(!ph2)continue;
+    const dt=(1/90)*(o.fq||1),k=ph2.k||55,c=ph2.c||5.5,g=ph2.g==null?1:ph2.g,mx=ph2.max||.7,r=ph2.r||[0,1],vf=o.velFn,sd=(o.seed||0)*1.7+Array.from(p.n).reduce((a,c)=>a+c.charCodeAt(0),0)%13;let th=0,w=0;
     for(let tau=t-.9;tau<t;tau+=dt){
       const ax=vf?(vf(tau+dt)-vf(tau))/dt/900:0;
       const hh=(o.hz||1)*(o.run?1.8:1),ay=walk*(def.bob||10)*Math.pow(TAU*hh,2)*Math.cos(2*TAU*hh*tau)*.0006;
@@ -179,5 +190,5 @@ function draw(ctx,def0,o){
 }
 function freeOne(def){for(const p of def.piezas){if(p._t)gl.deleteTexture(p._t);if(p._t2)gl.deleteTexture(p._t2);if(p._ta)for(const k in p._ta)gl.deleteTexture(p._ta[k]);p._t=p._t2=p._ta=null;p._mesh=null;}}
 function liberar(def){if(!def||!gl)return;freeOne(def);if(def.vistas)for(const k in def.vistas)freeOne(def.vistas[k]);def._ok=false;def._prom=null;}
-window.SerieRig={prep,draw,liberar,pose,ACC,ok:()=>initGL()};
+window.SerieRig={fisDef,prep,draw,liberar,pose,ACC,ok:()=>initGL()};
 })();
