@@ -446,7 +446,9 @@ function itemPanel(P,it){
     if(it.ref&&it.ref.startsWith("hum:")){const pre=A.HUM_PRE[it.ref.slice(4)]||A.HUM_PRE.nino,pal=Object.assign({},pre,it.pal||{});
       h+=`<div class="card"><h4>🎨 Colores</h4>${[["piel","Piel"],["pelo","Pelo"],["camisa","Camisa"],["pantalon","Pantalón"],["zapato","Zapatos"]].map(([k,l])=>row(l,`<input type="color" data-k="${k}" value="${pal[k]}">`)).join("")}
       ${row("Peinado",`<select id="pPe">${[["corto","Corto"],["largo","Largo"],["coletas","Coletas"],["calvo","Sin pelo"]].map(([v,l])=>`<option value="${v}" ${pal.pelo_estilo===v?"selected":""}>${l}</option>`).join("")}</select>`)}
-      ${row("Sombrero",`<input id="pGo" type="checkbox" ${pal.gorro?"checked":""}><input type="color" id="pGoC" value="${pal.gorro||"#d9b878"}">`)}</div>`;}
+      ${row("Sombrero",`<input id="pGo" type="checkbox" ${pal.gorro?"checked":""}><input type="color" id="pGoC" value="${pal.gorro||"#d9b878"}">`)}
+      ${[["lentes","Lentes","#2a2a2a"],["mochila","Mochila","#d9602b"],["bufanda","Bufanda","#d33f49"],["capa","Capa","#6a3fb5"]].map(([k,l,c0])=>row(l,`<input type="checkbox" data-ac2="${k}" ${pal[k]?"checked":""}><input type="color" data-ac2c="${k}" value="${pal[k]||c0}">`)).join("")}
+      <div class="sub" style="font-size:11px;opacity:.65">Los accesorios se ven de frente. La capa y la bufanda se mueven con el personaje.</div></div>`;}
   }
   if(it.kind==="img"&&window.Relieve)h+=Relieve.card(it,it.ref);
   h+=`<div class="card"><h4>✨ Animar entrada y salida</h4><div class="sub" style="font-size:11px;opacity:.7;margin-bottom:4px">Hace que aparezca y se vaya con animación. Funciona con personajes, decoración e imágenes.</div>
@@ -481,6 +483,7 @@ function itemPanel(P,it){
   bind(P,"#gT0","onchange",e=>{it.go.t0=+e.target.value||0;ch();});bind(P,"#gT1","onchange",e=>{it.go.t1=+e.target.value||3;ch();});
   const pa=bind(P,"#pPas","oninput",e=>setv("paso",e.target.value/100));if(pa)pa.onchange=ch;
   P.querySelectorAll("input[data-k]").forEach(e=>{e.oninput=()=>{it.pal=Object.assign({},it.pal||{},{[e.dataset.k]:e.value});draw();};e.onchange=ch;});
+  P.querySelectorAll("[data-ac2]").forEach(c=>{const k=c.dataset.ac2,col=P.querySelector(`[data-ac2c="${k}"]`),ap=()=>{it.pal=Object.assign({},it.pal||{},{[k]:c.checked?col.value:null});draw();};c.onchange=()=>{ap();ch();};col.oninput=()=>{if(c.checked)ap();};col.onchange=()=>{if(c.checked)ch();};});
   bind(P,"#pPe","onchange",e=>{it.pal=Object.assign({},it.pal||{},{pelo_estilo:e.target.value});ch();});
   const gc=()=>{it.pal=Object.assign({},it.pal||{},{gorro:P.querySelector("#pGo").checked?P.querySelector("#pGoC").value:null});draw();};bind(P,"#pGo","onchange",()=>{gc();ch();});const gcc=bind(P,"#pGoC","oninput",gc);if(gcc)gcc.onchange=ch;
   bind(P,"#pEx","onchange",e=>{it.expr=e.target.value;ch();draw();});

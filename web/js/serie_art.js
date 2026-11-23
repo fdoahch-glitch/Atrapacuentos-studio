@@ -247,7 +247,7 @@ function miniFondo(bg,w,h){const cv=document.createElement("canvas");cv.width=w;
   for(let i=0;i<bg.L.length;i++){const c=layerCanvas(bg,i,.5);g.drawImage(c,640*.5,0,1280*.5,720*.5,0,0,w,h);}return cv;}
 
 /* ================= personajes humanos por piezas ================= */
-const HUM_BASE={piel:"#f3c9a0",pelo:"#6b4528",camisa:"#4fae64",pantalon:"#b9a46a",zapato:"#5b3a22",pelo_estilo:"corto",gorro:null};
+const HUM_BASE={piel:"#f3c9a0",pelo:"#6b4528",camisa:"#4fae64",pantalon:"#b9a46a",zapato:"#5b3a22",pelo_estilo:"corto",gorro:null,lentes:null,mochila:null,bufanda:null,capa:null};
 const HUM_PRE={
   nino:{n:"Niño explorador",piel:"#f3c9a0",pelo:"#6b4528",camisa:"#7bbf5a",pantalon:"#b9a46a",zapato:"#5b3a22",pelo_estilo:"corto",gorro:"#d9b878"},
   nina:{n:"Niña aventurera",piel:"#e9b98a",pelo:"#2a1d16",camisa:"#ff7aa5",pantalon:"#4a6fb5",zapato:"#7a3a4a",pelo_estilo:"coletas",gorro:null},
@@ -304,10 +304,16 @@ function humano(pal){
   const bc=P.pelo_estilo==="calvo"?"#bdbdbd":shade(P.pelo,-.1);
   for(const [n,cx,sg] of [["ceja_i",152,1],["ceja_d",208,-1]])
     add(n,cx-24,84,48,26,[cx,100],{par:"cabeza",exp:{feliz:{dy:-5},sorpresa:{dy:-12},triste:{r:-.34*sg,dy:-2},enojo:{r:.4*sg,dy:3}}},g=>{g.strokeStyle=bc;g.lineWidth=5;g.lineCap="round";g.beginPath();g.moveTo(cx-14,100);g.quadraticCurveTo(cx,92,cx+14,100);g.stroke();},{rol:"ceja"});
+  /* accesorios intercambiables: cada uno es una pieza más, así se mueve con el personaje (la capa y la bufanda cuelgan con física) */
+  if(P.capa)add("capa",92,214,176,270,[180,224],{phys:{r:[0,1],k:40,c:4,g:.9,max:.45,w:.3},par:"torso"},g=>{g.fillStyle=P.capa;g.beginPath();g.moveTo(112,224);g.lineTo(248,224);g.lineTo(268,470);g.quadraticCurveTo(180,490,92,470);g.closePath();g.fill();g.fillStyle="#0002";g.fillRect(176,230,8,240);},{rol:"capa"});
+  if(P.mochila)add("mochila",92,228,176,140,[180,240],{par:"torso"},g=>{g.fillStyle=P.mochila;rr(g,96,236,34,126,14);g.fill();rr(g,230,236,34,126,14);g.fill();g.fillStyle=shade(P.mochila,-.2);rr(g,100,250,12,70,6);g.fill();rr(g,248,250,12,70,6);g.fill();},{rol:"mochila"});
+  if(P.bufanda){add("bufanda",132,208,96,44,[180,222],{par:"torso"},g=>{g.fillStyle=P.bufanda;rr(g,138,214,84,30,15);g.fill();g.fillStyle=shade(P.bufanda,-.2);g.fillRect(156,214,10,30);g.fillRect(190,214,10,30);},{rol:"bufanda"});
+    add("bufanda_cola",196,230,34,110,[212,236],{phys:{r:[0,1],k:60,c:4.5,g:1.1,max:.6,w:.35},par:"torso"},g=>{g.fillStyle=P.bufanda;rr(g,198,232,28,98,10);g.fill();g.fillStyle=shade(P.bufanda,-.2);g.fillRect(198,262,28,9);g.fillRect(198,296,28,9);},{rol:"colgante"});}
+  if(P.lentes)add("lentes",126,100,108,56,[180,208],{par:"cabeza"},g=>{g.strokeStyle=P.lentes;g.lineWidth=5;g.beginPath();g.arc(152,126,21,0,TAU);g.stroke();g.beginPath();g.arc(208,126,21,0,TAU);g.stroke();g.beginPath();g.moveTo(173,124);g.lineTo(187,124);g.stroke();g.fillStyle="#bfe6ff33";g.beginPath();g.arc(152,126,19,0,TAU);g.fill();g.beginPath();g.arc(208,126,19,0,TAU);g.fill();},{rol:"lentes"});
   const alts=bocas(150,168,180,168);
   const bo=Object.assign({},alts);delete bo.rest;
   pcs.push({n:"boca",x:150,y:168,w:60,h:36,pv:[180,208],img:alts.rest,alts:bo,rol:"boca",m:{par:"cabeza"}});
-  const order=["coleta_i","coleta_d","pierna_i","pierna_d","torso","brazo_i","brazo_d","cabeza","ojo_i","ojo_d","ceja_i","ceja_d","boca"];pcs.sort((a,b)=>order.indexOf(a.n)-order.indexOf(b.n));
+  const order=["capa","mochila","coleta_i","coleta_d","pierna_i","pierna_d","torso","bufanda","bufanda_cola","brazo_i","brazo_d","cabeza","ojo_i","ojo_d","lentes","ceja_i","ceja_d","boca"];pcs.sort((a,b)=>order.indexOf(a.n)-order.indexOf(b.n));
   const def={w:360,h:640,feet:[180,606],esc:.52,piezas:pcs,bob:10,hum:true,pal:P};
   def.vistas={perfil:humanoPerfil(P)};
   return def;
@@ -335,9 +341,14 @@ function humanoPerfil(P){
   add("ojo_d",218-18,124-22,36,44,[220,126],{blink:1,exp:EXPE,par:"cabeza"},g=>{ell(g,220,126,12,17,"#fff");circ(g,225,128,9,"#3a2a1c");circ(g,228,123,3,"#fff");},{rol:"ojo",lado:"d"});
   const bc=P.pelo_estilo==="calvo"?"#bdbdbd":shade(P.pelo,-.1);
   add("ceja_d",196,84,50,26,[220,100],{par:"cabeza",exp:{feliz:{dy:-5},sorpresa:{dy:-12},triste:{r:-.3,dy:-2},enojo:{r:.35,dy:3}}},g=>{g.strokeStyle=bc;g.lineWidth=5;g.lineCap="round";g.beginPath();g.moveTo(206,100);g.quadraticCurveTo(220,92,236,98);g.stroke();},{rol:"ceja"});
+  if(P.capa)add("capa",92,214,100,262,[160,224],{phys:{r:[0,1],k:40,c:4,g:.9,max:.45,w:.3},par:"torso"},g=>{g.fillStyle=P.capa;g.beginPath();g.moveTo(150,224);g.lineTo(176,224);g.lineTo(150,470);g.quadraticCurveTo(120,484,96,462);g.closePath();g.fill();},{rol:"capa"});
+  if(P.mochila)add("mochila",112,230,54,136,[150,240],{par:"torso"},g=>{g.fillStyle=P.mochila;rr(g,116,236,40,124,14);g.fill();g.fillStyle=shade(P.mochila,-.2);rr(g,122,250,12,70,6);g.fill();},{rol:"mochila"});
+  if(P.bufanda){add("bufanda",150,208,92,44,[190,222],{par:"torso"},g=>{g.fillStyle=P.bufanda;rr(g,158,214,76,30,15);g.fill();g.fillStyle=shade(P.bufanda,-.2);g.fillRect(180,214,10,30);},{rol:"bufanda"});
+    add("bufanda_cola",136,230,40,110,[160,236],{phys:{r:[0,1],k:60,c:4.5,g:1.1,max:.6,w:.35},par:"torso"},g=>{g.fillStyle=P.bufanda;rr(g,140,232,28,98,10);g.fill();g.fillStyle=shade(P.bufanda,-.2);g.fillRect(140,262,28,9);g.fillRect(140,296,28,9);},{rol:"colgante"});}
+  if(P.lentes)add("lentes",150,100,100,56,[190,208],{par:"cabeza"},g=>{g.strokeStyle=P.lentes;g.lineWidth=5;g.beginPath();g.arc(222,126,20,0,TAU);g.stroke();g.beginPath();g.moveTo(202,124);g.lineTo(160,130);g.stroke();g.fillStyle="#bfe6ff33";g.beginPath();g.arc(222,126,18,0,TAU);g.fill();},{rol:"lentes"});
   const alts=bocas(196,168,226,168);const bo=Object.assign({},alts);delete bo.rest;
   pcs.push({n:"boca",x:196,y:168,w:60,h:36,pv:[190,208],img:alts.rest,alts:bo,rol:"boca",m:{par:"cabeza"}});
-  const order=["canilla_i","muslo_i","brazo_i","torso","canilla_d","muslo_d","cabeza","ojo_d","ceja_d","boca","brazo_d"];pcs.sort((a,b)=>order.indexOf(a.n)-order.indexOf(b.n));
+  const order=["capa","mochila","canilla_i","muslo_i","brazo_i","torso","bufanda","bufanda_cola","canilla_d","muslo_d","cabeza","ojo_d","lentes","ceja_d","boca","brazo_d"];pcs.sort((a,b)=>order.indexOf(a.n)-order.indexOf(b.n));
   return {w:360,h:640,feet:[190,606],esc:.52,piezas:pcs,bob:10,hum:true};
 }
 window.SerieArt={D,SP,CATS,BG,BW,BH,sprite,dibujarFondo,miniFondo,humano,HUM_PRE,HUM_BASE,shade,mix,RND};
