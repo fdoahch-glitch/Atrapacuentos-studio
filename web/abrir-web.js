@@ -8,7 +8,7 @@ http.createServer((req, res) => {
   const f = path.normalize(path.join(ROOT, p));
   if (!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); res.end("no"); return; }
   const h = { "Content-Type": MIME[path.extname(f).toLowerCase()] || "application/octet-stream", "Cache-Control": "no-cache" };
-  if (process.env.CSP_CONF) { try { h["Content-Security-Policy"] = JSON.parse(fs.readFileSync(process.env.CSP_CONF, "utf8")).app.security.csp; } catch (e) {} } /* solo para pruebas: aplica la misma política que la app */
+  if (process.env.CSP_CONF) { try { h["Content-Security-Policy"] = JSON.parse(fs.readFileSync(process.env.CSP_CONF, "utf8")).app.security.csp; if (process.env.CSP_PRUEBAS) h["Content-Security-Policy"] = h["Content-Security-Policy"].replace("'wasm-unsafe-eval'", "'wasm-unsafe-eval' 'unsafe-eval'"); } catch (e) {} } /* solo para pruebas: aplica la misma política que la app */
   res.writeHead(200, h);
   fs.createReadStream(f).pipe(res);
 }).listen(PORT, "127.0.0.1", () => {
