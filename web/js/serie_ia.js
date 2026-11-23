@@ -52,12 +52,17 @@ function mono16k(buf){
   const k=buf.sampleRate/sr;for(let i=0;i<len;i++){const p=i*k,a=Math.floor(p),b=Math.min(buf.length-1,a+1),f=p-a;let v=0;for(let c=0;c<n;c++)v+=ch[c][a]*(1-f)+ch[c][b]*f;o[i]=v/n;}
   return o;
 }
-/* devuelve {texto, trozos:[{t0,t1,texto}]} */
+/* devuelve {texto, trozos:[{t0,t1,texto}], palabras:[{w,t0,t1}] (si el modelo pudo dar el tiempo de cada palabra)} */
 async function transcribir(audioBuffer,idioma,prog){
   const P=await whisper(prog);prog&&prog("Escuchando…");
-  const r=await P(mono16k(audioBuffer),{language:idioma||"spanish",task:"transcribe",return_timestamps:true,chunk_length_s:30,stride_length_s:5});
+  const a=mono16k(audioBuffer),base={language:idioma||"spanish",task:"transcribe",chunk_length_s:30,stride_length_s:5};
+  let r,palabras=[];
+  try{r=await P(a,Object.assign({return_timestamps:"word"},base));
+    palabras=(r.chunks||[]).filter(c=>c.timestamp&&c.timestamp[0]!=null).map(c=>({w:c.text.trim(),t0:c.timestamp[0],t1:c.timestamp[1]==null?audioBuffer.duration:c.timestamp[1]})).filter(p=>p.w&&!/^\[.*\]$/.test(p.w));}
+  catch(e){r=null;}
+  if(!r||!palabras.length){r=await P(a,Object.assign({return_timestamps:true},base));palabras=[];}
   const tr=(r.chunks||[]).map(c=>({t0:c.timestamp[0]||0,t1:c.timestamp[1]==null?audioBuffer.duration:c.timestamp[1],texto:c.text.trim()}));
-  return {texto:(r.text||"").trim(),trozos:tr};
+  return {texto:(r.text||"").trim(),trozos:tr,palabras};
 }
 /* ---------- labios (Rhubarb, sin internet) ---------- */
 let rhp=null;

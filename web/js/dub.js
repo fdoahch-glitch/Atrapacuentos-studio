@@ -44,7 +44,7 @@ async function setAudio(id,dataURL){
 function blobToDataURL(b){return new Promise(ok=>{const f=new FileReader();f.onload=()=>ok(f.result);f.readAsDataURL(b);});}
 function pushUndo(ln){const a=AUD[ln.id];if(!a)return;(ln._undo||(ln._undo=[])).push(a.data);if(ln._undo.length>6)ln._undo.shift();if(!ln._orig)ln._orig=a.data;}
 async function attach(ln,blob){
-  const d=await blobToDataURL(blob);pushUndo(ln);await setAudio(ln.id,d);idbPut(ln.id,d);
+  const d=await blobToDataURL(blob);pushUndo(ln);await setAudio(ln.id,d);idbPut(ln.id,d);delete ln.wt;
   const w=S().proj.mundos[S().proj.mundo],au=AUD[ln.id];
   const end=ln.t0+au.dur+.3;if(end>(w.dur||6)){w.dur=Math.min(120,Math.ceil(end));}
   S().changed();
@@ -61,8 +61,12 @@ async function restore(){
 /* ---------- tiempos de cada palabra ---------- */
 function words(ln){
   const au=AUD[ln.id],ws=(ln.txt||"").trim().split(/\s+/).filter(Boolean);
-  const key=ln.txt+"|"+ln.t0+"|"+(au?au.vs+"|"+au.ve:"x");
+  const key=ln.txt+"|"+ln.t0+"|"+(au?au.vs+"|"+au.ve:"x")+"|"+(ln.wt?ln.wt.length+":"+ln.wt[0][1]:"");
   if(ln._wk===key)return ln._w;
+  if(ln.wt&&ln.wt.length&&ws.length){/* tiempos reales de cada palabra (Whisper): cada palabra del texto toma el tramo que le toca */
+    const n=ln.wt.length,m=ws.length;
+    ln._w=ws.map((w,i)=>{const a=ln.wt[Math.min(n-1,Math.floor(i*n/m))],b=ln.wt[Math.max(0,Math.min(n-1,Math.ceil((i+1)*n/m)-1))];return {w,t0:ln.t0+a[1],t1:ln.t0+Math.max(b[2],a[1]+.05)};});
+    ln._wk=key;ln._s=ln._w[0].t0;ln._e=ln._w[ln._w.length-1].t1;return ln._w;}
   const start=ln.t0+(au?au.vs:0),end=au?ln.t0+au.ve:ln.t0+Math.max(1.2,ws.length*.42);
   const wt=ws.map(w=>w.replace(/[^\p{L}\p{N}]/gu,"").length+1.5+(/[,;:]$/.test(w)?1.5:0)+(/[.!?…]$/.test(w)?3:0));
   const tot=wt.reduce((a,b)=>a+b,0)||1;let a=start;
@@ -347,7 +351,7 @@ function render(){
     d.querySelector(".ed2").onclick=()=>{ln._ed=!ln._ed;render();};
     d.querySelector(".xp").onclick=()=>window.DubX&&DubX.exportOne(ln,k);
     d.querySelector(".rh").onclick=async()=>{const m=$("dbRecMsg"),say=t=>{if(m)m.textContent=t;};try{const cues=await IA.rhubarb(au.buf,ln.txt,say);ln.rh=cues.map(c=>[+c.start.toFixed(3),+c.end.toFixed(3),c.value]);au._rh=0;S().changed();say("Listo: los labios de esta voz ahora siguen los sonidos ("+cues.length+" movimientos). Rhubarb está hecho para inglés; en español es aproximado.");}catch(e){say("⚠ "+e.message);}};
-    d.querySelector(".ia").onclick=async()=>{const m=$("dbRecMsg"),say=t=>{if(m)m.textContent=t;};try{const r=await IA.transcribir(au.buf,"spanish",say);if(!r.texto||/^\[.*\]$/.test(r.texto)){say("No escuché palabras en esta voz.");return;}ln.txt=r.texto;S().changed();say("Listo: la IA escribió «"+r.texto.slice(0,60)+(r.texto.length>60?"…":"")+"». Revísalo, puede equivocarse.");render();}catch(e){say("⚠ "+e.message);}};
+    d.querySelector(".ia").onclick=async()=>{const m=$("dbRecMsg"),say=t=>{if(m)m.textContent=t;};try{const r=await IA.transcribir(au.buf,"spanish",say);if(!r.texto||/^\[.*\]$/.test(r.texto)){say("No escuché palabras en esta voz.");return;}ln.txt=r.texto;ln.wt=(r.palabras||[]).map(p=>[p.w,+p.t0.toFixed(2),+p.t1.toFixed(2)]);if(!ln.wt.length)delete ln.wt;S().changed();say("Listo: la IA escribió «"+r.texto.slice(0,60)+(r.texto.length>60?"…":"")+"». Revísalo, puede equivocarse."+(ln.wt?" Los subtítulos y la boca ahora siguen el tiempo real de cada palabra.":""));render();}catch(e){say("⚠ "+e.message);}};
     d.querySelector(".un").onclick=async()=>{const u=ln._undo.pop();if(!u)return;await setAudio(ln.id,u);idbPut(ln.id,u);S().changed();render();};
     d.querySelector(".dv").onclick=()=>{pushUndo(ln);delete AUD[ln.id];ln.voz=false;S().changed();render();};
     d.querySelector(".cp").onclick=()=>{ls.splice(k+1,0,{id:newId(),txt:ln.txt||"",quien:ln.quien||"",t0:+(lineEnd(ln)+.3).toFixed(1)});S().changed();render();};

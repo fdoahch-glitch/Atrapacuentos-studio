@@ -147,6 +147,9 @@ function deform(p,P,t,po){
   const m=p.m||{},ms=p._mesh;
   if(m.wave){const w=m.wave,k=w.amp*(.35+.65*Math.min(1,po.walk||0))*(po.run?1.3:1),pp=TAU*t*(po.hz||1);
     for(let i=0;i<ms.nv;i++){const x=P[i*2],y=P[i*2+1],d=Math.hypot(x-w.x,y-w.y),th=k*Math.sin(pp-(w.ph||0)-d/w.len)*sm(0,w.mx,d),r=rot(x,y,w.x,w.y,th);P[i*2]=r[0];P[i*2+1]=r[1];}}
+  if(m.bend){/* cuello flexible: toda la pieza se curva suave, más cuanto más lejos del pivote; se curva más al hablar */
+    const b=m.bend,sp=(po.S&&po.S.speak)||0,k=b.amp*(.45+.9*sp)*(1+.6*Math.min(1,po.walk||0)),pp=TAU*t*(b.hz||.33)+(b.ph||0);
+    for(let i=0;i<ms.nv;i++){const x=P[i*2],y=P[i*2+1],d=Math.hypot(x-b.x,y-b.y),th=k*Math.sin(pp)*sm(0,b.mx,d),r=rot(x,y,b.x,b.y,th);P[i*2]=r[0];P[i*2+1]=r[1];}}
   if(p.warps){for(const d of p.warps){
     const sc=d.sc?1+d.sc*Math.sin(TAU*(d.hz||.5)*t):1,ra=d.rot?d.rot*Math.sin(TAU*t+(d.ph||0)):0;
     for(let k=0;k<ms.nv;k++){const x=P[k*2],y=P[k*2+1],dist=Math.hypot(ms.pos[k*2]-d.cx,ms.pos[k*2+1]-d.cy),w=1-sm(d.r*.25,d.r,dist);if(w<=0)continue;

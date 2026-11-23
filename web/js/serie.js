@@ -83,6 +83,9 @@ function distribuir(eje){const g=quedan().filter(i=>i._bb);if(g.length<3){say("P
   g.forEach((i,k)=>{const d=a+(b-a)*k/(g.length-1)-pos(i);if(h)i.x=Math.round(i.x+d/z);else i.y=Math.round(i.y+d/z);});
   changed();draw();}
 function alternar(it,que){it[que]=!it[que];if(it[que]&&sel===it.uid&&que==="bloq"){}if(it.oculto&&sel===it.uid){sel=null;msel.clear();}changed();renderProps();draw();}
+const VEST_PRE={explorador:{n:"🧭 Explorador",pal:{camisa:"#6a8f4a",pantalon:"#b9a46a",zapato:"#5b3a22",gorro:"#d9b878",lentes:null,mochila:"#d9602b",bufanda:null,capa:null}},
+  invierno:{n:"❄️ Invierno",pal:{camisa:"#3f6fb5",pantalon:"#2d3550",zapato:"#2a2a2a",gorro:"#d33f49",lentes:null,mochila:null,bufanda:"#d33f49",capa:null}},
+  heroe:{n:"🦸 Héroe",pal:{camisa:"#d33f49",pantalon:"#2a3f8f",zapato:"#2a2a2a",gorro:null,lentes:"#2a2a2a",mochila:null,bufanda:null,capa:"#6a3fb5"}}};
 function strip(k,v){return(k[0]==="_"||k==="marRot"||k==="dubLv"||k==="dubVis"||k==="dubExpr")?undefined:v;}
 function snapshot(){return JSON.stringify(Object.assign({},proj,{imgs:undefined,actores:undefined}),strip);}
 function changed(quiet){
@@ -460,6 +463,10 @@ function itemPanel(P,it){
       ${row("Peinado",`<select id="pPe">${[["corto","Corto"],["largo","Largo"],["coletas","Coletas"],["calvo","Sin pelo"]].map(([v,l])=>`<option value="${v}" ${pal.pelo_estilo===v?"selected":""}>${l}</option>`).join("")}</select>`)}
       ${row("Sombrero",`<input id="pGo" type="checkbox" ${pal.gorro?"checked":""}><input type="color" id="pGoC" value="${pal.gorro||"#d9b878"}">`)}
       ${[["lentes","Lentes","#2a2a2a"],["mochila","Mochila","#d9602b"],["bufanda","Bufanda","#d33f49"],["capa","Capa","#6a3fb5"]].map(([k,l,c0])=>row(l,`<input type="checkbox" data-ac2="${k}" ${pal[k]?"checked":""}><input type="color" data-ac2c="${k}" value="${pal[k]||c0}">`)).join("")}
+      <div style="margin-top:6px;border-top:1px solid #343a58;padding-top:6px"><b>👗 Vestuarios</b><div class="sub" style="font-size:11px;opacity:.7;margin:2px 0 4px">Guarda la ropa y los accesorios de ahora, y póntelos de nuevo con un toque (también en otros personajes).</div>
+       <div class="btns">${Object.entries(Object.assign({},VEST_PRE,proj.vestuarios||{})).map(([id,v])=>`<button data-vs="${esc(id)}" title="Ponerlo">${esc(v.n)}</button>`).join("")}</div>
+       <div class="btns"><input id="vsNom" type="text" placeholder="Nombre del vestuario" style="flex:1;min-width:0"><button id="vsGuardar" class="pri">💾 Guardar este</button></div>
+       ${Object.keys(proj.vestuarios||{}).length?`<div class="btns"><button id="vsBorrar" class="dang">🗑 Borrar mis vestuarios</button></div>`:""}</div>
       <div class="sub" style="font-size:11px;opacity:.65">Los accesorios se ven de frente. La capa y la bufanda se mueven con el personaje.</div></div>`;}
   }
   if(it.kind==="img"&&window.Relieve)h+=Relieve.card(it,it.ref);
@@ -495,6 +502,11 @@ function itemPanel(P,it){
   bind(P,"#gT0","onchange",e=>{it.go.t0=+e.target.value||0;ch();});bind(P,"#gT1","onchange",e=>{it.go.t1=+e.target.value||3;ch();});
   const pa=bind(P,"#pPas","oninput",e=>setv("paso",e.target.value/100));if(pa)pa.onchange=ch;
   P.querySelectorAll("input[data-k]").forEach(e=>{e.oninput=()=>{it.pal=Object.assign({},it.pal||{},{[e.dataset.k]:e.value});draw();};e.onchange=ch;});
+  P.querySelectorAll("[data-vs]").forEach(b=>b.onclick=()=>{const v=Object.assign({},VEST_PRE,proj.vestuarios||{})[b.dataset.vs];if(!v)return;it.pal=Object.assign({},it.pal||{},v.pal);changed();renderProps();draw();});
+  bind(P,"#vsGuardar","onclick",()=>{const n=(P.querySelector("#vsNom").value||"").trim();if(!n){say("Escribe un nombre para el vestuario.");return;}
+    const pre=A.HUM_PRE[it.ref.slice(4)]||A.HUM_PRE.nino,pal=Object.assign({},pre,it.pal||{}),K=["camisa","pantalon","zapato","gorro","lentes","mochila","bufanda","capa"],v={};for(const k of K)v[k]=pal[k]||null;
+    proj.vestuarios=proj.vestuarios||{};proj.vestuarios["u"+Date.now().toString(36)]={n,pal:v};changed();renderProps();say("Vestuario «"+n+"» guardado.");});
+  bind(P,"#vsBorrar","onclick",()=>{delete proj.vestuarios;changed();renderProps();});
   P.querySelectorAll("[data-ac2]").forEach(c=>{const k=c.dataset.ac2,col=P.querySelector(`[data-ac2c="${k}"]`),ap=()=>{it.pal=Object.assign({},it.pal||{},{[k]:c.checked?col.value:null});draw();};c.onchange=()=>{ap();ch();};col.oninput=()=>{if(c.checked)ap();};col.onchange=()=>{if(c.checked)ch();};});
   bind(P,"#pPe","onchange",e=>{it.pal=Object.assign({},it.pal||{},{pelo_estilo:e.target.value});ch();});
   const gc=()=>{it.pal=Object.assign({},it.pal||{},{gorro:P.querySelector("#pGo").checked?P.querySelector("#pGoC").value:null});draw();};bind(P,"#pGo","onchange",()=>{gc();ch();});const gcc=bind(P,"#pGoC","oninput",gc);if(gcc)gcc.onchange=ch;

@@ -18,6 +18,12 @@ Nada existente fue eliminado ni simplificado; los proyectos antiguos siguen abri
 - «Respirar / mecer» para cualquier elemento (suave o fuerte).
 - Marioneta en vivo: el micrófono mueve la boca (probado con micrófono simulado). La cámara es experimental: baja un modelo de ~4 MB con permiso; NO probada con cámara ni modelo real. No graba la actuación, solo la muestra en vivo.
 
+- Vestuarios: 3 de fábrica (explorador, invierno, héroe) y los que guardes; se aplican con un toque.
+- Cuello flexible: rol «Cuello (se curva)» en el Taller; se curva más al hablar y al caminar.
+- Subtítulos y boca con el tiempo real de cada palabra (Whisper incluido en el proyecto). Probado el reparto de tiempos; NO probado con voz humana real.
+- Ya existían: IK de piernas, cola en onda, entrada/salida suaves por acción.
+- No hecho: voz sintética local y recorte con IA (SAM) porque requerían modelos que no pude verificar ni bajar; IK sobre terreno desnivelado (la app no tiene terreno).
+
 ## Pruebas
 - 12 de 12 pruebas de interfaz (`python3 pruebas/correr_ui.py`), más pruebas Rust del núcleo y de la app real vía tauri-driver (Linux).
 

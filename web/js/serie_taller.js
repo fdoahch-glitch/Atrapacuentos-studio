@@ -5,7 +5,7 @@
 const $=id=>document.getElementById(id);
 const esc=t=>String(t==null?"":t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const TAU=Math.PI*2;
-const ROLES=[["cuerpo","Cuerpo (tronco)"],["cabeza","Cabeza"],["mandibula","Mandíbula o boca (se abre al hablar)"],["cola","Cola (ondula)"],["brazo","Brazo (se balancea)"],["saluda","Brazo que saluda"],["pata","Pata o pierna (camina)"],["muslo","Muslo / pata de arriba (con rodilla)"],["canilla","Canilla / pata de abajo"],["colgante","Colgante (pelo, bufanda, flequillo)"],["ala","Ala (aletea)"],["oreja","Oreja"],["ojo","Ojo (parpadea)"],["jinete","Persona o cosa montada"],["otro","Otra parte"]];
+const ROLES=[["cuerpo","Cuerpo (tronco)"],["cabeza","Cabeza"],["mandibula","Mandíbula o boca (se abre al hablar)"],["cola","Cola (ondula)"],["cuello","Cuello (se curva)"],["brazo","Brazo (se balancea)"],["saluda","Brazo que saluda"],["pata","Pata o pierna (camina)"],["muslo","Muslo / pata de arriba (con rodilla)"],["canilla","Canilla / pata de abajo"],["colgante","Colgante (pelo, bufanda, flequillo)"],["ala","Ala (aletea)"],["oreja","Oreja"],["ojo","Ojo (parpadea)"],["jinete","Persona o cosa montada"],["otro","Otra parte"]];
 const COLS=["#ff6b6b","#4ecdc4","#ffd93d","#a78bfa","#6bcB77","#ff9f43","#54a0ff","#f368e0","#00d2d3","#feca57"];
 let T=null,pvRaf=0;
 function fresh(){return {img:null,w:0,h:0,k:1,polys:[],cur:[],mode:"idle",draft:null,sel:-1,nombre:"Mi personaje"};}
@@ -247,6 +247,7 @@ function motion(role,pv,bb,state,p,names){
     case "mandibula":return {ta:-.5,jaw:1,par:state.headName||undefined};
     case "ojo":return {blink:1,par:state.headName||undefined};
     case "cola":return {wave:{x:pv[0],y:pv[1],amp:.2,len:Math.max(80,far*.55),mx:Math.max(120,far*1.05),ph:1.1},aw:.05,pw:-1,ai:.03};
+    case "cuello":return {bend:{x:pv[0],y:pv[1],amp:.14,mx:Math.max(90,far*.9),ph:.6},aw:.02,pw:.5,ai:.015};
     case "brazo":{const pw=(state.brazos++%2)?Math.PI:0;return {aw:.32,pw,ai:.05};}
     case "saluda":return {osc:[-.05,.38,1.7]};
     case "pata":{const pw=(state.patas++%2)?Math.PI:0;return {aw:.3,pw,lift:[Math.max(8,bb.h*.06),pw+Math.PI]};}
