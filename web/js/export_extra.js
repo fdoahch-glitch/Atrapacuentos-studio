@@ -75,11 +75,11 @@ function gif(frames,w,h,delayCs){
 function correr(o){
   const S=Studio,eng=window.__atr2.engine,cv=$("cv"),tmp=document.createElement("canvas");tmp.width=o.W;tmp.height=o.H;const g=tmp.getContext("2d");g.imageSmoothingQuality="high";
   const [CW,CH]=o.ss>1?[par2(o.W*o.ss),par2(o.H*o.ss)]:[o.W,o.H];
-  eng.fijar(CW,CH);let n=0;
+  eng.fijar(CW,CH);let n=0;const pend=[];
   return new Promise(res=>{
     const ex={fps:o.fps,cancelled:false,__x:1,desde:o.desde,hasta:o.hasta,blur:o.blur||0,skip:()=>false,
-      capture(){if(ex.cancelled)return;g.drawImage(cv,0,0,o.W,o.H);if(window.Fx)Fx.draw(g,o.W,o.H);if(window.Dub)Dub.drawSub(g,o.W,o.H);o.frame(tmp,g,n++);o.prog&&o.prog(Math.min(1,n/o.total));},
-      end(){S.exporting=false;eng.soltar();res({cancelado:ex.cancelled,n});}};
+      capture(){if(ex.cancelled)return;g.drawImage(cv,0,0,o.W,o.H);if(window.Fx)Fx.draw(g,o.W,o.H);if(window.Dub)Dub.drawSub(g,o.W,o.H);const pr=o.frame(tmp,g,n++);if(pr&&pr.then)pend.push(pr);o.prog&&o.prog(Math.min(1,n/o.total));},
+      end(){S.exporting=false;eng.soltar();Promise.all(pend).then(()=>res({cancelado:ex.cancelled,n}),()=>res({cancelado:true,n,error:"Falló al guardar un cuadro."}));}};
     window.__xcancel=()=>{ex.cancelled=true;};
     S.exporting=true;if(!S.beginExport(ex)){S.exporting=false;eng.soltar();res({cancelado:true,n:0,error:"Hay una vista previa en curso. Detenla primero."});}
   });

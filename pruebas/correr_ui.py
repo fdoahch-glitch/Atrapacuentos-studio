@@ -17,6 +17,7 @@ PRUEBAS = {
     "fps.py": ["errores: []"],
     "dist.py": ["botones ayuda: [True, True, True]", "reporte incluye error: True"],
     "anim2.py": ["errores: []"],
+    "extras.py": ["'relampago': True", "controles: [True, True, True, True, True]", "errores: []"],
 }
 def servidor_listo():
     try: urllib.request.urlopen("http://localhost:8765/index.html", timeout=2); return True

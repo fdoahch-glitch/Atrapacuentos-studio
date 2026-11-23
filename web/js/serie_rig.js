@@ -129,7 +129,7 @@ function pose(def,t,o){
       const ax=vf?(vf(tau+dt)-vf(tau))/dt/900:0;
       const hh=(o.hz||1)*(o.run?1.8:1),ay=walk*(def.bob||10)*Math.pow(TAU*hh,2)*Math.cos(2*TAU*hh*tau)*.0006;
       const wind=ph2.w==null?.25:ph2.w,br=wind*Math.sin(TAU*.55*tau+sd)*Math.sin(TAU*.23*tau+sd*2);
-      const drive=g*(r[1]*ax-r[0]*ay)*60+br*18;
+      const vi=o.vient||0,gust=vi*(7+6*Math.sin(TAU*.31*tau+sd*.7)+3*Math.sin(TAU*.9*tau+sd)),drive=g*(r[1]*ax-r[0]*ay)*60+br*18+gust*(ph2.w==null?.25:ph2.w)*4;
       w+=(-k*th-c*w+drive)*dt;th=clamp(th+w*dt,-mx,mx);}
     P[p.n].a+=th;}
   acciones(def,t,o,P,rt,S);
