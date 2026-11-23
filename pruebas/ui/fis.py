@@ -1,8 +1,9 @@
+import os
 import asyncio,hashlib
 from playwright.async_api import async_playwright
 async def main():
   async with async_playwright() as p:
-    b=await p.chromium.launch(executable_path="/usr/bin/google-chrome",args=["--no-sandbox","--use-gl=angle","--use-angle=swiftshader","--enable-unsafe-swiftshader","--ignore-gpu-blocklist"])
+    b=await p.chromium.launch(executable_path=os.environ.get("CHROME","/usr/bin/google-chrome"),args=["--no-sandbox","--use-gl=angle","--use-angle=swiftshader","--enable-unsafe-swiftshader","--ignore-gpu-blocklist"])
     pg=await b.new_page(viewport={"width":1500,"height":900});errs=[]
     pg.on("pageerror",lambda e:errs.append(str(e)[:250]))
     await pg.add_init_script("try{localStorage.atr_tutorial=1}catch(e){}")

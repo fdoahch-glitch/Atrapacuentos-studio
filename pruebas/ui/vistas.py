@@ -1,3 +1,4 @@
+import os
 import asyncio,json,base64
 from playwright.async_api import async_playwright
 exec(open('det_ui.py').read().split("async def main")[0])
@@ -7,7 +8,7 @@ async def cargar(pg,ruta):
     await (await fc.value).set_files(ruta);await pg.wait_for_timeout(1000)
 async def main():
   async with async_playwright() as p:
-    b=await p.chromium.launch(executable_path="/usr/bin/google-chrome",args=["--no-sandbox","--use-gl=angle","--use-angle=swiftshader","--enable-unsafe-swiftshader","--ignore-gpu-blocklist"])
+    b=await p.chromium.launch(executable_path=os.environ.get("CHROME","/usr/bin/google-chrome"),args=["--no-sandbox","--use-gl=angle","--use-angle=swiftshader","--enable-unsafe-swiftshader","--ignore-gpu-blocklist"])
     pg=await b.new_page(viewport={"width":1500,"height":950});errs=[];pg.on("pageerror",lambda e:errs.append(str(e)[:200]))
     await pg.add_init_script("try{localStorage.atr_tutorial=1}catch(e){}")
     await pg.goto("http://localhost:8765/index.html");await pg.wait_for_timeout(1500)

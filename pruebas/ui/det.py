@@ -1,3 +1,4 @@
+import os
 import asyncio,json
 from playwright.async_api import async_playwright
 JS="""
@@ -26,7 +27,7 @@ return out;})()
 """
 async def main():
   async with async_playwright() as p:
-    b=await p.chromium.launch(executable_path="/usr/bin/google-chrome",args=["--no-sandbox"])
+    b=await p.chromium.launch(executable_path=os.environ.get("CHROME","/usr/bin/google-chrome"),args=["--no-sandbox"])
     pg=await b.new_page();errs=[];pg.on("pageerror",lambda e:errs.append(str(e)[:200]))
     await pg.add_init_script("try{localStorage.atr_tutorial=1}catch(e){}")
     await pg.goto("http://localhost:8765/index.html");await pg.wait_for_timeout(1500)

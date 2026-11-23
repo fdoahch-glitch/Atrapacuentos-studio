@@ -28,7 +28,7 @@ if(T.event)T.event.listen("menu",ev=>{
   const id=ev.payload;
   if(id==="abrir")N.abrirProyecto().catch(x=>window.Studio&&Studio.say("No se pudo abrir: "+x));
   else if(id==="guardar")N.guardarProyecto().catch(x=>window.Studio&&Studio.say("No se pudo guardar: "+x));
-  else if(id==="equipo")N.equipo();
+  else if(id==="equipo")(window.Distrib?Distrib.diagnostico():N.equipo());
 });
 /* ventana «Mi equipo»: qué tarjeta y qué codificadores encontró */
 N.equipo=async()=>{

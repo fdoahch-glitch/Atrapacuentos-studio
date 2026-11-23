@@ -124,6 +124,48 @@ async fn autoguardado_recuperar(s: State<'_, Estado>) -> R<Option<(String, Strin
 #[tauri::command]
 async fn mostrar_en_carpeta(app: AppHandle, ruta: String) -> R<()> { tauri_plugin_opener::reveal_item_in_dir(PathBuf::from(&ruta)).map_err(e)?; let _ = app; Ok(()) }
 
+const REPO: &str = "fdoahch-glitch/Atrapacuentos-studio";
+
+#[derive(Serialize)]
+struct VersionInfo { version: String, os: String, repo: String }
+#[tauri::command]
+fn version_app() -> VersionInfo { VersionInfo { version: env!("CARGO_PKG_VERSION").into(), os: std::env::consts::OS.into(), repo: REPO.into() } }
+
+/// Pregunta a GitHub si hay una versión nueva. Si no hay internet, devuelve error y la app sigue normal.
+#[tauri::command]
+async fn buscar_actualizacion() -> R<Option<atrapa_core::actualizar::Novedad>> {
+    tauri::async_runtime::spawn_blocking(|| atrapa_core::actualizar::buscar(REPO, env!("CARGO_PKG_VERSION"), std::env::consts::OS).map_err(|x| x.to_string())).await.map_err(e)?
+}
+/// Baja el instalador (solo desde GitHub), lo abre y cierra la app para que el instalador pueda reemplazar los archivos.
+/// Solo se llama cuando la persona pulsa «Descargar e instalar».
+#[tauri::command]
+async fn instalar_actualizacion(app: AppHandle, url: String, archivo: String) -> R<()> {
+    let nombre: String = archivo.chars().map(|c| if c.is_ascii_alphanumeric() || "._- ".contains(c) { c } else { '_' }).collect();
+    if nombre.is_empty() { return Err("falta el nombre del instalador".into()); }
+    let dir = std::env::temp_dir().join("atrapacuentos-actualizacion"); std::fs::create_dir_all(&dir).map_err(e)?;
+    let dest = dir.join(&nombre);
+    let ap = app.clone(); let d2 = dest.clone();
+    tauri::async_runtime::spawn_blocking(move || atrapa_core::actualizar::descargar(&url, &d2, |n, t| { let _ = ap.emit("actualizar-progreso", serde_json::json!({"n": n, "total": t})); }).map_err(|x| x.to_string())).await.map_err(e)??;
+    #[cfg(unix)] { use std::os::unix::fs::PermissionsExt; let _ = std::fs::set_permissions(&dest, std::fs::Permissions::from_mode(0o755)); }
+    if nombre.to_lowercase().ends_with(".deb") { tauri_plugin_opener::reveal_item_in_dir(&dest).map_err(e)?; return Ok(()); }
+    std::process::Command::new(&dest).spawn().map_err(e)?;
+    let ap2 = app.clone();
+    std::thread::spawn(move || { std::thread::sleep(std::time::Duration::from_millis(900)); ap2.exit(0); });
+    Ok(())
+}
+/// Abre una página de GitHub en el navegador (solo direcciones de github.com).
+#[tauri::command]
+fn abrir_enlace(app: AppHandle, url: String) -> R<()> {
+    if !url.starts_with("https://github.com/") { return Err("solo se abren páginas de GitHub".into()); }
+    use tauri_plugin_opener::OpenerExt; app.opener().open_url(url, None::<&str>).map_err(e)
+}
+/// Guarda un texto (por ejemplo el reporte de un problema) donde la persona elija.
+#[tauri::command]
+async fn guardar_texto(app: AppHandle, texto: String, nombre: String) -> R<Option<String>> {
+    let Some(p) = app.dialog().file().add_filter("Texto", &["txt"]).set_file_name(nombre).set_title("Guardar").blocking_save_file() else { return Ok(None) };
+    let ruta = p.into_path().map_err(e)?; std::fs::write(&ruta, texto).map_err(e)?; Ok(Some(ruta.to_string_lossy().into()))
+}
+
 #[tauri::command]
 async fn guardar_proyecto(app: AppHandle, texto: String, nombre: String) -> R<Option<String>> {
     let Some(p) = app.dialog().file().add_filter("Proyecto Atrapacuentos", &["atrapacuentos"]).set_file_name(format!("{nombre}.atrapacuentos")).set_title("Guardar proyecto").blocking_save_file() else { return Ok(None) };
@@ -207,7 +249,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![sistema, elegir_guardar_video, guardar_audio, exportar_iniciar, exportar_cuadro, exportar_terminar, exportar_cancelar, mostrar_en_carpeta, guardar_proyecto, abrir_proyecto, relieve_modelo_archivo, relieve_estimar, autoguardar, autoguardado_versiones, autoguardado_leer, autoguardado_recuperar])
+        .invoke_handler(tauri::generate_handler![sistema, elegir_guardar_video, guardar_audio, exportar_iniciar, exportar_cuadro, exportar_terminar, exportar_cancelar, mostrar_en_carpeta, guardar_proyecto, abrir_proyecto, relieve_modelo_archivo, relieve_estimar, autoguardar, autoguardado_versiones, autoguardado_leer, autoguardado_recuperar, version_app, buscar_actualizacion, instalar_actualizacion, abrir_enlace, guardar_texto])
         .build(tauri::generate_context!())
         .expect("no se pudo abrir Atrapacuentos Studio")
         .run(|app, ev| {

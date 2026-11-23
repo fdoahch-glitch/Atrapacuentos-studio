@@ -120,8 +120,9 @@ function ayuda(){
   const [t,tips]=contexto();
   const m=ventana(`<h2>❓ Ayuda</h2><h4>${t}</h4><ul>${tips.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>
   <h4>Atajos de teclado</h4>${ATAJOS.map(([k,d])=>`<div class="fila"><kbd>${esc(k)}</kbd><span>${esc(d)}</span></div>`).join("")}
-  <div class="btns" style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button id="ayTut">🎓 Ver el tutorial</button><button id="ayPri">🎬 Mi primer vídeo</button><button id="ayCer" class="go">Cerrar</button></div>`);
+  <div class="btns" style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button id="ayTut">🎓 Ver el tutorial</button><button id="ayPri">🎬 Mi primer vídeo</button><button id="ayAct">🔄 Actualizaciones</button><button id="ayDia">🩺 Diagnóstico del equipo</button><button id="ayRep">🐞 Reportar un problema</button><button id="ayCer" class="go">Cerrar</button></div>`);
   Q("#ayCer",m).onclick=()=>m.remove();Q("#ayTut",m).onclick=()=>{m.remove();tutorial();};Q("#ayPri",m).onclick=()=>{m.remove();guia(true);};
+  for(const [id,f] of [["#ayAct","actualizaciones"],["#ayDia","diagnostico"],["#ayRep","reporte"]])Q(id,m).onclick=()=>{m.remove();window.Distrib&&Distrib[f]();};
 }
 window.addEventListener("keydown",e=>{
   if(/INPUT|TEXTAREA|SELECT/.test(e.target.tagName||"")||e.target.isContentEditable)return;
