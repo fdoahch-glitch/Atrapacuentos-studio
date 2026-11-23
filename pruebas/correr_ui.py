@@ -34,7 +34,7 @@ def main():
     elegidas = sys.argv[1:] or list(PRUEBAS)
     srv = None
     if not servidor_listo():
-        srv = subprocess.Popen(["node", os.path.join(RAIZ, "web", "abrir-web.js")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        srv = subprocess.Popen(["node", os.path.join(RAIZ, "web", "abrir-web.js")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env={**os.environ, "CSP_CONF": os.path.join(RAIZ, "src-tauri", "tauri.conf.json")})
         for _ in range(30):
             if servidor_listo(): break
             time.sleep(0.5)

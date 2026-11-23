@@ -7,7 +7,9 @@ http.createServer((req, res) => {
   let p = decodeURIComponent(new URL(req.url, "http://x").pathname); if (p === "/") p = "/index.html";
   const f = path.normalize(path.join(ROOT, p));
   if (!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); res.end("no"); return; }
-  res.writeHead(200, { "Content-Type": MIME[path.extname(f).toLowerCase()] || "application/octet-stream", "Cache-Control": "no-cache" });
+  const h = { "Content-Type": MIME[path.extname(f).toLowerCase()] || "application/octet-stream", "Cache-Control": "no-cache" };
+  if (process.env.CSP_CONF) { try { h["Content-Security-Policy"] = JSON.parse(fs.readFileSync(process.env.CSP_CONF, "utf8")).app.security.csp; } catch (e) {} } /* solo para pruebas: aplica la misma política que la app */
+  res.writeHead(200, h);
   fs.createReadStream(f).pipe(res);
 }).listen(PORT, "127.0.0.1", () => {
   const url = "http://localhost:" + PORT + "/index.html";
