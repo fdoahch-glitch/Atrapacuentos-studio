@@ -98,6 +98,7 @@ function skUI(){
   c.innerHTML=`<h4>🦴 Esqueleto</h4>
    <div class="btns" style="margin-bottom:6px"><button data-tp="humano">🧍 Persona</button><button data-tp="dino">🦖 Animal de lado</button><button data-tp="vacio">⬜ Vacío</button></div>
    <div class="btns" style="margin-bottom:6px"><button data-det="1" class="pri" title="Mira la silueta de tu dibujo y coloca los huesos solos">🔍 Detectar partes automáticamente</button></div>
+   <div class="btns" style="margin-bottom:6px;align-items:center"><button data-deta="1" class="pri" title="Para dinosaurios y animales dibujados de lado: cabeza, mandíbula, cola y patas">🦖 Detectar animal de lado</button><select id="skTipoA" title="Tipo de animal"><option value="">Automático</option><option value="bipedo">Bípedo (T. rex, gallina)</option><option value="cuadrupedo">Cuadrúpedo (oso, perro)</option></select></div>
    <div id="skDet" style="font-size:11.5px;margin-bottom:6px"></div>
    <div class="btns" style="margin-bottom:6px"><button data-tl="move" class="${S.tool==="move"?"on":""}">✋ Mover puntos</button><button data-tl="add" class="${S.tool==="add"?"on":""}">➕ Hueso nuevo</button><button data-tl="brush" class="${S.tool==="brush"?"on":""}">🖌 Reforzar zona</button></div>
    <div style="font-size:12px;margin:4px 0">Mira hacia: <button data-f="1" class="${S.face===1?"on":""}">derecha →</button><button data-f="-1" class="${S.face===-1?"on":""}">← izquierda</button></div>
@@ -106,6 +107,9 @@ function skUI(){
    <div class="sub" style="font-size:11px;opacity:.7;margin-top:6px">Los colores muestran cómo se va a cortar. Mueve los puntos blancos (articulación) y los rombos (punta del hueso). Con 🖌 pintas encima de lo que debe moverse con ese hueso.</div>`;
   c.querySelectorAll("[data-det]").forEach(b=>b.onclick=()=>{const r=Detecta.detectar(T.img);const d=$("skDet");
     if(!r.ok){d.innerHTML="⚠ "+r.nota;return;}
+    S.bones=r.bones;S.face=r.face;S.sel=r.bones[0].id;S.det=r;skUI();skCalc();skMsg();});
+  c.querySelectorAll("[data-deta]").forEach(b=>b.onclick=()=>{const t=$("skTipoA").value;const r=Detecta.detectarAnimal(T.img,t?{tipo:t}:{});const d=$("skDet");
+    if(!r.ok){d.innerHTML="⚠ "+(r.nota||"No pude ver el animal.");return;}
     S.bones=r.bones;S.face=r.face;S.sel=r.bones[0].id;S.det=r;skUI();skCalc();skMsg();});
   if(S.det&&$("skDet"))$("skDet").innerHTML=`<b>Detecté:</b> ${S.det.hitos.map(h=>h.nombre).join(", ")}.<br>Seguridad: <b>${Math.round(S.det.conf*100)}%</b>. ${S.det.notas.map(esc).join(" ")}<br><span style="opacity:.7">Si algo quedó mal, arrastra los puntos: todo es corregible.</span>`;
   c.querySelectorAll("[data-tp]").forEach(b=>b.onclick=()=>{S.bones=[];skStart(b.dataset.tp);});

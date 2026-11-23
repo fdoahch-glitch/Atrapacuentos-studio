@@ -10,6 +10,7 @@ PRUEBAS = {
     "acc.py": ["errores: []", "lentes"],
     "det.py": ['"ok": true', "errores []"],
     "det_ui.py": ["bones: 8", "errores: []"],
+    "animal_ui.py": ["huesos: cuerpo,cola,cabeza,mandibula,muslo,canilla,muslo,canilla", "mira: -1", "errores: []"],
     "txt.py": ["saludar>caminar>saltarx2", "errores: []"],
     "vistas.py": ["agrandar: 400 -> 800", "vistas: ['perfil']", "errores: []"],
     "expx.py": ["cuadro t=1.25 igual (completo vs tramo): True", "movimiento suave distinto del normal: True", "errores: []"],
