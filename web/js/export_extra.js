@@ -139,7 +139,8 @@ function ui(){
 function avisos(){
   const done=$("expDone");if(!done)return;
   $("expGo")&&$("expGo").addEventListener("click",()=>{try{if(window.Notification&&Notification.permission==="default")Notification.requestPermission();}catch(e){}});
-  new MutationObserver(()=>{if(!done.hidden){const t=$("expRes")?$("expRes").textContent:"Tu video está listo";
+  new MutationObserver(()=>{if(!done.hidden){const rr=$("expRes");if(rr&&E.med&&E.med.n&&!/tardó/.test(rr.textContent)){const m=E.med;rr.textContent+=" · tardó "+(m.seg<90?m.seg.toFixed(0)+" s":(m.seg/60).toFixed(1)+" min")+" ("+(m.n/m.seg).toFixed(1)+" cuadros/s de exportación; el video dura "+(m.n/m.fps).toFixed(0)+" s)";}
+    const t=$("expRes")?$("expRes").textContent:"Tu video está listo";
     const tt=document.title;document.title="✅ Video listo – "+tt.replace(/^✅ Video listo – /,"");
     try{if(window.Notification&&Notification.permission==="granted"&&document.hidden)new Notification("Atrapacuentos Studio",{body:t});}catch(e){}
     window.addEventListener("focus",()=>{document.title=tt.replace(/^✅ Video listo – /,"");},{once:true});}}).observe(done,{attributes:true,attributeFilter:["hidden"]});
@@ -161,6 +162,6 @@ function medidor(){
   setInterval(()=>{if(activo&&!Studio.playing){activo=false;b.hidden=true;if((window.PrevQ||1)<1||window.FisQ){window.PrevQ=1;window.FisQ=1;refit();}}},700);
   const refit=()=>{window.dispatchEvent(new Event("resize"));const c=$("cv");if(c&&window.ResizeObserver){/* fitCanvas se llama al cambiar tamaño */}if(window.Studio&&Studio.refit)Studio.refit();};
 }
-function init(){ui();avisos();medidor();if(!Studio.__xw){Studio.__xw=1;const o=Studio.beginExport;Studio.beginExport=ex=>{if(!ex.__x)Object.assign(ex,E.flags());return o(ex);};}}
+function init(){ui();avisos();medidor();if(!Studio.__xw){Studio.__xw=1;const o=Studio.beginExport;Studio.beginExport=ex=>{if(!ex.__x){Object.assign(ex,E.flags());const c0=ex.capture;let n=0;const t0=performance.now();E.med={n:0,seg:0,fps:ex.fps};ex.capture=function(){n++;E.med={n,seg:(performance.now()-t0)/1000,fps:ex.fps};return c0.apply(this,arguments);};}return o(ex);};}}
 if(window.Studio&&$("expOpts"))init();else document.addEventListener("studio-ready",init);
 })();
