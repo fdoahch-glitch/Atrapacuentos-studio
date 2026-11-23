@@ -24,6 +24,7 @@ PRUEBAS = {
     "expv.py": ["¡Listo!", "errores: []"],
     "fps.py": ["errores: []"],
     "dist.py": ["botones ayuda: [True, True, True]", "reporte incluye error: True", "diagnóstico incluye WebGPU: True | incluye WebGL2 y MSAA: True"],
+    "gl2d.py": ["figuras: 12", "distintas: ninguna", "errores: []"],
     "ref_cuadros.py": ["escenas de referencia: 5", "cambiadas: ninguna", "errores: []"],
     "anim2.py": ["errores: []"],
     "extras.py": ["'relampago': True", "controles: [True, True, True, True, True]", "errores: []"],

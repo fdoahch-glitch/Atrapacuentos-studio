@@ -52,3 +52,9 @@ Nada existente fue eliminado ni simplificado; los proyectos antiguos siguen abri
 ## Calidad visual: etapa 0 (nov 2026)
 - `pruebas/ui/ref_cuadros.py`: dibuja 5 escenas de referencia con `Serie.frame` (la función que usan editor y MP4) y las compara píxel a píxel con `pruebas/referencias/*.png`. Con el motor actual dan diferencia 0,000 en 3 corridas seguidas, o sea que el dibujo es determinista (con el identificador de cada elemento fijo: el azar de `uid()` cambia la fase de parpadeo y respiración). Para cambiar el aspecto a propósito: `python3 ref_cuadros.py --guardar`.
 - Ayuda → Diagnóstico ahora informa WebGL2 (MSAA máximo, color flotante) y si WebGPU existe en el motor de la app instalada (WebView2). **Pendiente: ejecutar ese diagnóstico en tu PC con el instalador** antes de decidir sobre WebGPU.
+
+## GL2D: dibujo 100 % WebGL2 (en curso)
+- `web/js/gl2d.js`: contexto de dibujo propio sobre WebGL2 (relleno por estencil con regla del cero o par-impar, líneas con extremos/uniones/punteado, curvas, arcos, elipses, degradados lineales y radiales, transformaciones, transparencia, mezclas multiplicar/aclarar/borrar, imágenes con mipmaps, suavizado MSAA hasta 8x). No usa Canvas 2D para dibujar.
+- Prueba `gl2d.py`: 12 figuras comparadas con Canvas 2D del navegador (solo como regla de medir); las 12 dentro de tolerancia.
+- Decidido con el usuario: textos y subtítulos con una tipografía libre incluida en la app y dibujada como formas; sin WebGL2 la app avisa con un mensaje claro (sin respaldo en Canvas 2D).
+- Pendiente: probar `drawImage` entre contextos, conectar GL2D a `frame()` (fondos, decoración, relieve, efectos), un solo contexto WebGL2 compartido con el rig de personajes y el lector YUV, texto con tipografía incluida, desenfoque (`filter`) y `getImageData` de los pocos usos que quedan, mensaje sin WebGL2, y comparar las 5 escenas de referencia.
