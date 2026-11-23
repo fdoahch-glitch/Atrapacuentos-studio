@@ -14,6 +14,7 @@ async def main():
     print("diag inicial:",(await pg.inner_text("#dgTx"))[:200].replace("\n"," | "))
     await pg.click("#dgMed");await pg.wait_for_function("document.getElementById('dgPr').textContent==='Listo.'",timeout=60000)
     t=await pg.inner_text("#dgTx");print("diag medido:\n"+t[:900])
+    print("diagnóstico incluye WebGPU:","WebGPU:" in t,"| incluye WebGL2 y MSAA:","WebGL2, MSAA hasta" in t)
     await pg.click("#dgCe")
     await pg.evaluate("Distrib.reporte()");await pg.wait_for_timeout(600)
     await pg.fill("#rpTx","Se cuelga al exportar");await pg.wait_for_timeout(200)

@@ -23,7 +23,8 @@ PRUEBAS = {
     "expx.py": ["cuadro t=1.25 igual (completo vs tramo): True", "movimiento suave distinto del normal: True", "errores: []"],
     "expv.py": ["¡Listo!", "errores: []"],
     "fps.py": ["errores: []"],
-    "dist.py": ["botones ayuda: [True, True, True]", "reporte incluye error: True"],
+    "dist.py": ["botones ayuda: [True, True, True]", "reporte incluye error: True", "diagnóstico incluye WebGPU: True | incluye WebGL2 y MSAA: True"],
+    "ref_cuadros.py": ["escenas de referencia: 5", "cambiadas: ninguna", "errores: []"],
     "anim2.py": ["errores: []"],
     "extras.py": ["'relampago': True", "controles: [True, True, True, True, True]", "errores: []"],
 }

@@ -71,7 +71,19 @@ async function medirCodec(hw){
   try{await enc.flush();}catch(e){err=e;}try{enc.close();}catch(e){}
   return err?{soporta:true,error:String(err.message||err)}:{soporta:true,fps:N/((performance.now()-t0)/1000)};
 }
-function glInfo(){try{const c=document.createElement("canvas"),gl=c.getContext("webgl2")||c.getContext("webgl");if(!gl)return {ok:false};const e=gl.getExtension("WEBGL_debug_renderer_info");return {ok:true,gpu:e?gl.getParameter(e.UNMASKED_RENDERER_WEBGL):"(oculto)",maxTex:gl.getParameter(gl.MAX_TEXTURE_SIZE)};}catch(e){return {ok:false};}}
+function glInfo(){try{const c=document.createElement("canvas"),gl=c.getContext("webgl2")||c.getContext("webgl");if(!gl)return {ok:false};const e=gl.getExtension("WEBGL_debug_renderer_info");const w2=typeof WebGL2RenderingContext!=="undefined"&&gl instanceof WebGL2RenderingContext;return {ok:true,v2:w2,gpu:e?gl.getParameter(e.UNMASKED_RENDERER_WEBGL):"(oculto)",maxTex:gl.getParameter(gl.MAX_TEXTURE_SIZE),msaa:w2?gl.getParameter(gl.MAX_SAMPLES):0,flotantes:!!gl.getExtension("EXT_color_buffer_float")};}catch(e){return {ok:false};}}
+/* ¿Existe WebGPU en este motor (WebView2 en la app instalada)? Solo se mide: la app no lo usa todavía. */
+async function webgpuInfo(){
+  try{
+    if(!navigator.gpu)return {ok:false,motivo:"el motor no expone WebGPU"};
+    const a=await Promise.race([navigator.gpu.requestAdapter(),new Promise(r=>setTimeout(()=>r("tiempo"),4000))]);
+    if(a==="tiempo")return {ok:false,motivo:"no respondió en 4 s"};
+    if(!a)return {ok:false,motivo:"no hay adaptador compatible"};
+    const i=a.info||(a.requestAdapterInfo?await a.requestAdapterInfo():{})||{};
+    let dev=false;try{const d=await a.requestDevice();dev=true;d.destroy&&d.destroy();}catch(e){}
+    return {ok:true,dispositivo:dev,vendor:i.vendor||"",arq:i.architecture||"",desc:i.description||i.device||"",fallback:!!a.isFallbackAdapter};
+  }catch(e){return {ok:false,motivo:String(e&&e.message||e)};}
+}
 /* recomendaciones según lo medido (solo reglas simples y honestas; si no hay dato, no se opina) */
 function recomendar(d){
   const r=[];
@@ -98,6 +110,7 @@ function recomendar(d){
 async function reunir(medir,prog){
   const d={version:VER.version,os:VER.os,ua:navigator.userAgent,cores:navigator.hardwareConcurrency||null,mem:navigator.deviceMemory||null,
     pantalla:screen.width+"×"+screen.height+" @"+(window.devicePixelRatio||1)+"x",gl:glInfo(),webcodecs:typeof VideoEncoder!=="undefined"};
+  d.webgpu=await webgpuInfo();
   if(window.Nativo&&Nativo.activo){try{d.nat=await Nativo.sistema();}catch(e){d.natError=String(e);}}
   if(medir){prog("Midiendo el dibujo en pantalla (1.5 s)…");d.canvasFps=await medirCanvas();
     prog("Midiendo la codificación por hardware…");d.hw=await medirCodec("prefer-hardware");
@@ -106,7 +119,7 @@ async function reunir(medir,prog){
 }
 function textoDiag(d){
   const L=["Atrapacuentos Studio "+d.version+" · "+d.os,"Pantalla: "+d.pantalla,"CPU: "+(d.cores||"?")+" núcleos · RAM aprox.: "+(d.mem?d.mem+" GB (el navegador la redondea)":"?"),
-    "Gráficos del navegador: "+(d.gl.ok?d.gl.gpu+" (textura máx. "+d.gl.maxTex+")":"no disponible"),"WebCodecs: "+(d.webcodecs?"sí":"no")];
+    "Gráficos del navegador: "+(d.gl.ok?d.gl.gpu+" (textura máx. "+d.gl.maxTex+(d.gl.v2?", WebGL2, MSAA hasta "+d.gl.msaa+"x, color flotante "+(d.gl.flotantes?"sí":"no"):", solo WebGL1")+")":"no disponible"),"WebGPU: "+(d.webgpu?(d.webgpu.ok?"disponible"+(d.webgpu.desc||d.webgpu.vendor?" ("+[d.webgpu.vendor,d.webgpu.arq,d.webgpu.desc].filter(Boolean).join(" ")+")":"")+(d.webgpu.dispositivo?"":", pero no pudo crear el dispositivo")+(d.webgpu.fallback?" [adaptador por software]":""):"no disponible ("+d.webgpu.motivo+")"):"sin datos"),"WebCodecs: "+(d.webcodecs?"sí":"no")];
   if(d.nat){L.push("Tarjetas (motor nativo): "+((d.nat.gpus||[]).map(g=>g.nombre+" ["+g.api+", "+g.tipo+"]").join("; ")||"ninguna"));L.push("Codificadores: "+((d.nat.codificadores||[]).map(c=>c.id+(c.gpu?" (GPU)":"")).join(", ")||"ninguno")+" · FFmpeg: "+(d.nat.ffmpeg?"sí":"no")+" · Modelo de relieve: "+(d.nat.relieve_listo?"listo":"sin bajar"));}
   if(d.canvasFps!=null)L.push("Prueba de dibujo 1080p: "+d.canvasFps.toFixed(1)+" cuadros/s");
   if(d.hw)L.push("Codificar H.264 1080p por hardware (navegador): "+(d.hw.soporta===false?"no disponible":d.hw.error?"error "+d.hw.error:d.hw.fps.toFixed(1)+" cuadros/s"));
