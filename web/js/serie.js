@@ -39,7 +39,7 @@ function snapshot(){return JSON.stringify(Object.assign({},proj,{imgs:undefined,
 function changed(quiet){
   const s=snapshot();if(s!==lastSnap){undo.push(lastSnap);if(undo.length>60)undo.shift();redo=[];lastSnap=s;}
   $("bUndo").disabled=!undo.length;$("bRedo").disabled=!redo.length;
-  clearTimeout(saveTmr);saveTmr=setTimeout(saveAuto,900);clearTimeout(thumbTmr);thumbTmr=setTimeout(thumbs,400);
+  clearTimeout(saveTmr);saveTmr=setTimeout(saveAuto,900);window.dispatchEvent(new Event("atr-cambio"));clearTimeout(thumbTmr);thumbTmr=setTimeout(thumbs,400);
   if(!quiet){draw();}
   window.dispatchEvent(new Event("serie-tl"));
 }

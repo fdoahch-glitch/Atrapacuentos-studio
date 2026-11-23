@@ -17,6 +17,8 @@ struct Estado {
     codificadores: Mutex<Option<Vec<Codificador>>>,
     relieve: Mutex<Option<Relieve>>,
     recursos: Mutex<Option<PathBuf>>,
+    auto_base: Mutex<Option<PathBuf>>,
+    cierre_inesperado: Mutex<bool>,
 }
 
 type R<T> = Result<T, String>;
@@ -98,6 +100,27 @@ async fn exportar_terminar(s: State<'_, Estado>) -> R<u64> {
 #[tauri::command]
 async fn exportar_cancelar(s: State<'_, Estado>) -> R<()> { if let Some(ex) = s.export.lock().unwrap().take() { ex.cancelar(); } Ok(()) }
 
+fn base_auto(app: &AppHandle) -> PathBuf { carpeta_datos(app).join("autoguardado") }
+fn ahora_ms() -> u64 { std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0) }
+
+#[tauri::command]
+async fn autoguardar(app: AppHandle, nombre: String, texto: String) -> R<bool> {
+    atrapa_core::autoguardado::guardar(&base_auto(&app), &nombre, &texto, ahora_ms(), 60_000).map_err(e)
+}
+#[tauri::command]
+async fn autoguardado_versiones(app: AppHandle, nombre: Option<String>) -> R<Vec<atrapa_core::autoguardado::Version>> {
+    Ok(atrapa_core::autoguardado::listar(&base_auto(&app), nombre.as_deref()))
+}
+#[tauri::command]
+async fn autoguardado_leer(app: AppHandle, ruta: String) -> R<String> { atrapa_core::autoguardado::leer(&base_auto(&app), &ruta) }
+/// Si la sesión anterior no cerró bien, devuelve el proyecto guardado más reciente para recuperarlo.
+#[tauri::command]
+async fn autoguardado_recuperar(s: State<'_, Estado>) -> R<Option<(String, String)>> {
+    if !*s.cierre_inesperado.lock().unwrap() { return Ok(None); }
+    let Some(base) = s.auto_base.lock().unwrap().clone() else { return Ok(None) };
+    Ok(atrapa_core::autoguardado::mas_reciente(&base).and_then(|(n, p, _)| std::fs::read_to_string(p).ok().map(|t| (n, t))))
+}
+
 #[tauri::command]
 async fn mostrar_en_carpeta(app: AppHandle, ruta: String) -> R<()> { tauri_plugin_opener::reveal_item_in_dir(PathBuf::from(&ruta)).map_err(e)?; let _ = app; Ok(()) }
 
@@ -152,6 +175,11 @@ fn main() {
         .manage(Estado::default())
         .setup(|app| {
             let est: State<Estado> = app.state();
+            {
+                let base = carpeta_datos(app.handle()).join("autoguardado");
+                *est.cierre_inesperado.lock().unwrap() = atrapa_core::autoguardado::iniciar_sesion(&base);
+                *est.auto_base.lock().unwrap() = Some(base);
+            }
             if let Ok(rd) = app.path().resource_dir() {
                 *est.recursos.lock().unwrap() = Some(rd.clone());
                 let bin = rd.join("bin");
@@ -179,7 +207,12 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![sistema, elegir_guardar_video, guardar_audio, exportar_iniciar, exportar_cuadro, exportar_terminar, exportar_cancelar, mostrar_en_carpeta, guardar_proyecto, abrir_proyecto, relieve_modelo_archivo, relieve_estimar])
-        .run(tauri::generate_context!())
-        .expect("no se pudo abrir Atrapacuentos Studio");
+        .invoke_handler(tauri::generate_handler![sistema, elegir_guardar_video, guardar_audio, exportar_iniciar, exportar_cuadro, exportar_terminar, exportar_cancelar, mostrar_en_carpeta, guardar_proyecto, abrir_proyecto, relieve_modelo_archivo, relieve_estimar, autoguardar, autoguardado_versiones, autoguardado_leer, autoguardado_recuperar])
+        .build(tauri::generate_context!())
+        .expect("no se pudo abrir Atrapacuentos Studio")
+        .run(|app, ev| {
+            if let tauri::RunEvent::Exit = ev {
+                if let Some(b) = app.state::<Estado>().auto_base.lock().unwrap().clone() { atrapa_core::autoguardado::cerrar_sesion(&b); }
+            }
+        });
 }
