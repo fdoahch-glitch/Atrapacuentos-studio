@@ -119,5 +119,20 @@ function recorteClic(img,x,y,tol){
   const polys=cs.map(c=>window.RigAuto.chaikin(window.RigAuto.rdpClosed(c,.9),2).map(([px,py])=>[(px+.5)/R.s,(py+.5)/R.s]));
   return {polys,area:area/ N,w,h};
 }
-window.Detecta={detectar,recorteClic};
+/* ---------- agrandar imagen (mejora clásica, no es IA): reescala suave en pasos + afinado de bordes ---------- */
+function agrandar(img,f,max){
+  f=f||2;max=max||4096;const W=img.width,H=img.height;let k=f;if(Math.max(W,H)*k>max)k=max/Math.max(W,H);
+  if(k<=1.01)return null;
+  let cur=img,cw=W,ch=H;const tw=Math.round(W*k),th=Math.round(H*k);
+  while(cw<tw||ch<th){const nw=Math.min(tw,Math.round(cw*1.5)),nh=Math.min(th,Math.round(ch*1.5));
+    const c=document.createElement("canvas");c.width=nw;c.height=nh;const g=c.getContext("2d");g.imageSmoothingEnabled=true;g.imageSmoothingQuality="high";g.drawImage(cur,0,0,nw,nh);cur=c;cw=nw;ch=nh;}
+  /* máscara de enfoque suave (solo color; la transparencia no se toca) */
+  const out=document.createElement("canvas");out.width=cw;out.height=ch;const g=out.getContext("2d",{willReadFrequently:true});g.drawImage(cur,0,0);
+  const id=g.getImageData(0,0,cw,ch),D=id.data,B=new Uint8ClampedArray(D);
+  const bl=document.createElement("canvas");bl.width=cw;bl.height=ch;const bg=bl.getContext("2d",{willReadFrequently:true});bg.filter="blur(1.2px)";bg.drawImage(cur,0,0);
+  const bd=bg.getImageData(0,0,cw,ch).data,amt=.6;
+  for(let i=0;i<D.length;i+=4){if(B[i+3]<8)continue;for(let c=0;c<3;c++){const v=B[i+c]+(B[i+c]-bd[i+c])*amt;D[i+c]=v<0?0:v>255?255:v;}}
+  g.putImageData(id,0,0);return out;
+}
+window.Detecta={detectar,recorteClic,agrandar};
 })();

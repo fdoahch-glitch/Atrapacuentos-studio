@@ -19,18 +19,25 @@ function render(){
   m.innerHTML=`<div class="mbox" style="max-width:1120px;max-height:94vh;overflow:auto"><h2>✂️ Taller de piezas</h2>
   <p>Convierte tu dibujo en un personaje con partes que se mueven. <b>1</b> Sube la imagen · <b>2</b> dibuja el contorno de cada parte · <b>3</b> marca dónde se dobla · <b>4</b> pruébalo y guárdalo.</p>
   <div style="display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px">
-   <div><div class="btns" style="margin-bottom:8px"><button id="tImg" class="pri">🖼 1. Elegir imagen</button><button id="tNew" ${T.img?"":"disabled"}>✂ 2. Recortar una pieza</button><button id="tClic" ${T.img?"":"disabled"} title="Haces clic sobre una parte del dibujo y el programa la recorta por ti">👆 Recorte con un clic</button><button id="tAuto" ${T.img?"":"disabled"} class="pri">🦴 Esqueleto automático</button><button id="tClose" ${T.cur.length>2?"":"disabled"}>✔ Cerrar contorno</button><button id="tUndo" ${T.cur.length?"":"disabled"}>↩ Quitar punto</button></div>
+   <div><div class="btns" style="margin-bottom:8px"><button id="tImg" class="pri">🖼 1. Elegir imagen</button><button id="tNew" ${T.img?"":"disabled"}>✂ 2. Recortar una pieza</button><button id="tUp" ${T.img?"":"disabled"} title="Hace la imagen más grande con bordes más nítidos (mejora clásica, sin IA ni descargas)">🔎 Agrandar imagen</button><button id="tClic" ${T.img?"":"disabled"} title="Haces clic sobre una parte del dibujo y el programa la recorta por ti">👆 Recorte con un clic</button><button id="tAuto" ${T.img?"":"disabled"} class="pri">🦴 Esqueleto automático</button><button id="tClose" ${T.cur.length>2?"":"disabled"}>✔ Cerrar contorno</button><button id="tUndo" ${T.cur.length?"":"disabled"}>↩ Quitar punto</button></div>
     <div id="tMsg" style="min-height:34px;background:#232740;border-radius:9px;padding:8px 10px;margin-bottom:8px;font-size:12.5px"></div>
     <div style="background:#0e1016;border-radius:10px;padding:6px;text-align:center"><canvas id="tCv" style="max-width:100%;cursor:crosshair;background:repeating-conic-gradient(#2a2f45 0% 25%,#232740 0% 50%) 0 0/20px 20px;border-radius:6px"></canvas></div></div>
    <div><div class="card" id="tSkCard" hidden></div><div class="card"><h4>🧩 Piezas</h4><div id="tList" style="max-height:230px;overflow:auto"></div><div class="sub" style="font-size:11px;opacity:.65">Lo que no recortes queda como <b>cuerpo</b> (la pieza que no se dobla).</div></div>
     <div class="card"><h4>▶ Probar</h4><canvas id="tPv" width="300" height="220" style="width:100%;background:#cfe9f7;border-radius:8px"></canvas>
      <div class="btns" style="margin-top:6px"><button id="tWalk" class="on">🚶 Caminar</button><button id="tTalk">🗣 Hablar</button></div></div>
-    <div class="card"><h4>💾 Guardar</h4><input id="tNom" type="text" value="${esc(T.nombre)}" style="width:100%;margin-bottom:6px"><button id="tSave" class="go" style="width:100%" ${T.polys.length?"":"disabled"}>Guardar personaje</button></div></div></div>
+    <div class="card"><h4>💾 Guardar</h4><input id="tNom" type="text" value="${esc(T.nombre)}" style="width:100%;margin-bottom:6px"><select id="tVista" style="width:100%;margin-bottom:6px" title="Si tienes un dibujo del mismo personaje de lado, guárdalo como su vista de perfil: se usa solo cuando camina."><option value="">Guardar como personaje nuevo</option>${((window.Studio&&Studio.serie&&Studio.serie.proj().actores)||[]).map(a=>`<option value="${esc(a.id)}" ${T.vistaDe===a.id?"selected":""}>Vista de lado (mira a la derecha) de: ${esc(a.n||a.id)}</option>`).join("")}</select><button id="tSave" class="go" style="width:100%" ${T.polys.length?"":"disabled"}>Guardar personaje</button></div></div></div>
   <div class="wnav"><span style="opacity:.6;font-size:12px">Consejo: usa una imagen con fondo transparente (PNG). Recorta un poco por dentro del borde.</span><button id="tExit">Cerrar</button></div></div>`;
   $("tExit").onclick=cerrar;$("tImg").onclick=pick;$("tNew").onclick=()=>{T.mode="draw";T.cur=[];msg("Haz clic alrededor de la parte que quieres mover. Ciérralo con «Cerrar contorno», Enter, o haciendo clic en el primer punto.");render2();};
   $("tAuto").onclick=()=>skStart();
+  $("tUp").onclick=()=>{const c=Detecta.agrandar(T.img,2,4096);if(!c){msg("Esta imagen ya es muy grande (más de 4096 px). No hace falta agrandarla.");return;}
+    const w0=T.w,h0=T.h,k=c.width/w0;T.img=c;T.w=c.width;T.h=c.height;
+    /* los huesos y piezas ya marcados se escalan para quedar en el mismo lugar */
+    const sc=p=>p&&[p[0]*k,p[1]*k];(T.polys||[]).forEach(q=>{q.pts=q.pts.map(sc);q.pv=sc(q.pv);q.tip=sc(q.tip);});
+    if(T.sk&&T.sk.bones)T.sk.bones.forEach(b=>{b.pv=sc(b.pv);b.tip=sc(b.tip);b.brush=(b.brush||[]).map(sc);});
+    T.def=null;render();msg("🔎 Listo: de "+w0+"×"+h0+" a "+c.width+"×"+c.height+" píxeles. (Es una mejora clásica de nitidez, no una IA: no inventa detalles nuevos.)");};
   $("tClic").onclick=()=>{T.mode="clic";T.cur=[];render();msg("👆 Haz <b>clic sobre la parte</b> que quieres separar (un brazo, la cabeza, un sombrero…). Si recorta de más o de menos, cambia la sensibilidad abajo y vuelve a hacer clic.");const c=$("tMsg");c.insertAdjacentHTML("beforeend",`<div style="margin-top:6px;font-size:12px">Sensibilidad: <input id="tTol" type="range" min="10" max="90" value="${T.tol||38}" style="vertical-align:middle"> <span style="opacity:.7">(menos = recorta solo colores casi iguales)</span></div>`);$("tTol").oninput=e=>{T.tol=+e.target.value;};};
   $("tClose").onclick=closePoly;$("tUndo").onclick=()=>{T.cur.pop();render();paint();};
+  $("tVista").onchange=e=>{T.vistaDe=e.target.value||null;};
   $("tNom").onchange=e=>{T.nombre=e.target.value||"Mi personaje";};$("tSave").onclick=guardar;
   $("tWalk").onclick=()=>{T.pvMode="walk";mark();};$("tTalk").onclick=()=>{T.pvMode="talk";mark();};
   setupCv();list();skRender();msg(T.img?(T.mode==="draw"?"Haz clic para marcar el contorno…":"Imagen lista. Pulsa «Recortar una pieza»."):"Empieza subiendo la imagen de tu personaje.");
@@ -304,6 +311,8 @@ async function startPreview(){
 }
 function guardar(){
   if(!T.polys.length)return;let def=T.def||buildDef();def.n=T.nombre||def.n;
+  if(T.vistaDe){const P=Studio.serie.proj(),a=(P.actores||[]).find(x=>x.id===T.vistaDe);
+    if(a){const v=def;a.vistas=a.vistas||{};v.n="perfil";delete v.vistas;a.vistas.perfil=v;if(window.SerieRig&&SerieRig.liberar)SerieRig.liberar(a);Studio.changed();Studio.say("Listo: «"+(a.n||a.id)+"» ahora usa este dibujo cuando camina de lado.");cerrar();T=null;return;}}
   window.Serie.addActorDef(def);cerrar();T=null;
 }
 window.Taller={abrir,cerrar,_T:()=>T,_skCrear:()=>skCrear(),_skStart:skStart,_build:()=>buildDef()};
