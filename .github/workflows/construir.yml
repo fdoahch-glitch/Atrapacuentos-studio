@@ -3,7 +3,7 @@
 name: Construir instaladores
 on:
   push:
-    branches: [main]
+    branches: [main, mejoras-estudio]
   workflow_dispatch:
 jobs:
   windows:
