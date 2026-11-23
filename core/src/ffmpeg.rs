@@ -73,6 +73,9 @@ pub struct Opciones {
 }
 fn h264() -> String { "h264".into() }
 
+/// Bloquea un Mutex aunque otro hilo haya fallado con el bloqueo tomado (el dato sigue siendo usable).
+pub fn bloquear<T>(m: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> { m.lock().unwrap_or_else(|p| p.into_inner()) }
+
 pub struct Exportacion {
     child: Child,
     tx: Option<std::sync::mpsc::SyncSender<Vec<u8>>>,
@@ -150,7 +153,7 @@ impl Exportacion {
         let errores = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
         if let Some(mut se) = child.stderr.take() {
             let e2 = errores.clone();
-            std::thread::spawn(move || { use std::io::Read; let mut b = [0u8; 4096]; while let Ok(n) = se.read(&mut b) { if n == 0 { break; } let mut g = e2.lock().unwrap(); if g.len() < 8000 { g.push_str(&String::from_utf8_lossy(&b[..n])); } } });
+            std::thread::spawn(move || { use std::io::Read; let mut b = [0u8; 4096]; while let Ok(n) = se.read(&mut b) { if n == 0 { break; } let mut g = bloquear(&e2); if g.len() < 8000 { g.push_str(&String::from_utf8_lossy(&b[..n])); } } });
         }
         let gpu_nombre = format!("{} ({}, {})", yuv.info.nombre, yuv.info.api, yuv.info.tipo);
         // los cuadros se escriben a FFmpeg en otro hilo, para que el programa pueda ir preparando el siguiente
@@ -158,26 +161,26 @@ impl Exportacion {
         let fallo = std::sync::Arc::new(std::sync::Mutex::new(None::<String>));
         let f2 = fallo.clone();
         let escritor = std::thread::spawn(move || {
-            while let Ok(c) = rx.recv() { if let Err(e) = stdin.write_all(&c) { *f2.lock().unwrap() = Some(e.to_string()); break; } }
+            while let Ok(c) = rx.recv() { if let Err(e) = stdin.write_all(&c) { *bloquear(&f2) = Some(e.to_string()); break; } }
         });
         Ok(Self { child, tx: Some(tx), escritor: Some(escritor), fallo, errores, yuv, w: o.w, h: o.h, usado: enc, cuadros: 0, gpu_nombre })
     }
 
     fn motivo(&self, e: String) -> anyhow::Error {
         std::thread::sleep(std::time::Duration::from_millis(150));
-        let det = self.errores.lock().unwrap().trim().to_string();
+        let det = bloquear(&self.errores).trim().to_string();
         anyhow!("FFmpeg dejó de responder ({}): {}", self.usado.id, if det.is_empty() { e } else { det })
     }
 
     /// Acepta un cuadro RGBA (w·h·4) o ya en YUV empaquetado (w·h·3/2).
     pub fn cuadro(&mut self, datos: &[u8]) -> Result<()> {
-        if let Some(f) = self.fallo.lock().unwrap().clone() { return Err(self.motivo(f)); }
+        if let Some(f) = bloquear(&self.fallo).clone() { return Err(self.motivo(f)); }
         let (w, h) = (self.w as usize, self.h as usize);
         let i420 = if datos.len() == w * h * 4 { self.yuv.convertir(datos)? }
             else if datos.len() == w * h * 3 / 2 { empaquetado_a_i420(w, h, datos) }
             else { return Err(anyhow!("cuadro de tamaño incorrecto ({} bytes)", datos.len())); };
         let tx = self.tx.as_ref().ok_or_else(|| anyhow!("la exportación ya terminó"))?;
-        if tx.send(i420).is_err() { let f = self.fallo.lock().unwrap().clone().unwrap_or_default(); return Err(self.motivo(f)); }
+        if tx.send(i420).is_err() { let f = bloquear(&self.fallo).clone().unwrap_or_default(); return Err(self.motivo(f)); }
         self.cuadros += 1;
         Ok(())
     }
@@ -185,13 +188,18 @@ impl Exportacion {
     pub fn terminar(mut self) -> Result<()> {
         drop(self.tx.take());
         if let Some(h) = self.escritor.take() { let _ = h.join(); }
-        if let Some(f) = self.fallo.lock().unwrap().clone() { let _ = self.child.kill(); return Err(self.motivo(f)); }
+        if let Some(f) = bloquear(&self.fallo).clone() { let _ = self.child.kill(); return Err(self.motivo(f)); }
         let st = self.child.wait()?;
         std::thread::sleep(std::time::Duration::from_millis(100));
-        if !st.success() { return Err(anyhow!("FFmpeg falló ({}): {}", self.usado.id, self.errores.lock().unwrap().trim())); }
+        if !st.success() { return Err(anyhow!("FFmpeg falló ({}): {}", self.usado.id, bloquear(&self.errores).trim())); }
         Ok(())
     }
+    pub fn pid(&self) -> u32 { self.child.id() }
     pub fn cancelar(mut self) { drop(self.tx.take()); let _ = self.child.kill(); if let Some(h) = self.escritor.take() { let _ = h.join(); } let _ = self.child.wait(); }
+}
+
+impl Drop for Exportacion {
+    fn drop(&mut self) { drop(self.tx.take()); let _ = self.child.kill(); let _ = self.child.wait(); }
 }
 
 /// Escribe un WAV de 16 bits estéreo (entrada: muestras intercaladas L,R en f32).
@@ -267,5 +275,60 @@ mod tests {
                 assert!((r - 255).abs() <= 3 && (g - 210).abs() <= 3 && (b - 122).abs() <= 3, "{nombre}/{codec}: color {r},{g},{b} en vez de 255,210,122");
             }
         }
+    }
+
+    fn opts(salida: &str) -> Opciones {
+        Opciones { w: 64, h: 36, fps: 30, mbps: 1.0, codec: "h264".into(), codificador: Some("libx264".into()), salida: salida.into(), audio: None, maestra: None, duracion: 0.0 }
+    }
+    fn cuadro_liso(n: u8) -> Vec<u8> { let mut f = vec![n; 64 * 36 * 4]; for p in f.chunks_mut(4) { p[3] = 255; } f }
+
+    #[test]
+    fn bloqueo_danado_se_recupera() {
+        let m = std::sync::Arc::new(std::sync::Mutex::new(5));
+        let m2 = m.clone();
+        let _ = std::thread::spawn(move || { let _g = m2.lock().unwrap(); panic!("falla con el bloqueo tomado"); }).join();
+        assert!(m.is_poisoned());
+        assert_eq!(*bloquear(&m), 5, "el dato sigue disponible");
+    }
+
+    #[test]
+    fn exportacion_que_falla_a_medias_avisa_y_no_se_cuelga() {
+        let lista = detectar();
+        let mala = std::env::temp_dir().join("atrapa_no_existe_xyz").join("sub").join("o.mp4");
+        let mut e = Exportacion::iniciar(&opts(&mala.to_string_lossy()), &lista).expect("iniciar");
+        let t = std::time::Instant::now();
+        let mut error = None;
+        for n in 0..400u32 { if let Err(x) = e.cuadro(&cuadro_liso((n % 255) as u8)) { error = Some(x.to_string()); break; } std::thread::sleep(std::time::Duration::from_millis(5)); }
+        let error = error.expect("debe avisar del fallo antes de terminar los cuadros");
+        assert!(error.contains("FFmpeg"), "mensaje claro: {error}");
+        assert!(t.elapsed().as_secs() < 20, "no debe colgarse");
+        e.cancelar();
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn exportacion_abandonada_no_deja_ffmpeg_colgado() {
+        let lista = detectar();
+        let dir = std::env::temp_dir().join("atrapa_abandono"); std::fs::create_dir_all(&dir).unwrap();
+        let mut e = Exportacion::iniciar(&opts(&dir.join("o.mp4").to_string_lossy()), &lista).expect("iniciar");
+        for n in 0..5 { e.cuadro(&cuadro_liso(n)).unwrap(); }
+        let pid = e.pid();
+        assert!(std::path::Path::new(&format!("/proc/{pid}")).exists(), "FFmpeg corre mientras se exporta");
+        drop(e); // la ventana se cerró o falló sin llamar a terminar ni cancelar
+        assert!(!std::path::Path::new(&format!("/proc/{pid}")).exists(), "FFmpeg debe cerrarse solo");
+    }
+
+    #[test]
+    fn despues_de_cancelar_se_puede_exportar_de_nuevo() {
+        let lista = detectar();
+        let dir = std::env::temp_dir().join("atrapa_reintento"); std::fs::create_dir_all(&dir).unwrap();
+        let a = dir.join("a.mp4"); let b = dir.join("b.mp4"); let _ = std::fs::remove_file(&b);
+        let mut e1 = Exportacion::iniciar(&opts(&a.to_string_lossy()), &lista).expect("iniciar 1");
+        for n in 0..3 { e1.cuadro(&cuadro_liso(n)).unwrap(); }
+        e1.cancelar();
+        let mut e2 = Exportacion::iniciar(&opts(&b.to_string_lossy()), &lista).expect("iniciar 2");
+        for n in 0..30 { e2.cuadro(&cuadro_liso(n)).unwrap(); }
+        e2.terminar().expect("la segunda exportación termina bien");
+        assert!(std::fs::metadata(&b).map(|m| m.len()).unwrap_or(0) > 500, "el video existe y tiene contenido");
     }
 }

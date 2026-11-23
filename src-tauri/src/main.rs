@@ -1,5 +1,5 @@
 #![cfg_attr(all(not(debug_assertions), target_os = "windows"), windows_subsystem = "windows")]
-use atrapa_core::ffmpeg::{self, Codificador, Exportacion, Opciones};
+use atrapa_core::ffmpeg::{self, bloquear, Codificador, Exportacion, Opciones};
 use atrapa_core::relieve::{self, Relieve};
 use atrapa_core::yuv;
 use serde::Serialize;
@@ -24,7 +24,7 @@ struct Estado {
 type R<T> = Result<T, String>;
 fn e<T: std::fmt::Display>(x: T) -> String { x.to_string() }
 
-fn bin_dir(s: &Estado) -> Option<PathBuf> { s.recursos.lock().unwrap().clone().map(|p| p.join("bin")) }
+fn bin_dir(s: &Estado) -> Option<PathBuf> { bloquear(&s.recursos).clone().map(|p| p.join("bin")) }
 fn lib_ort(s: &Estado) -> PathBuf {
     let n = if cfg!(windows) { "onnxruntime.dll" } else if cfg!(target_os = "macos") { "libonnxruntime.dylib" } else { "libonnxruntime.so" };
     if let Ok(p) = std::env::var("ATRAPA_ORT_LIB") { return PathBuf::from(p); }
@@ -33,7 +33,7 @@ fn lib_ort(s: &Estado) -> PathBuf {
 fn carpeta_datos(app: &AppHandle) -> PathBuf { app.path().app_data_dir().unwrap_or_else(|_| std::env::temp_dir().join("atrapacuentos")) }
 
 fn lista_codificadores(s: &Estado) -> Vec<Codificador> {
-    let mut g = s.codificadores.lock().unwrap();
+    let mut g = bloquear(&s.codificadores);
     if g.is_none() { *g = Some(ffmpeg::detectar()); }
     g.clone().unwrap()
 }
@@ -76,29 +76,33 @@ async fn exportar_iniciar(s: State<'_, Estado>, opciones: Opciones) -> R<Inicio>
     let ex = Exportacion::iniciar(&opciones, &lista).map_err(e)?;
     let r = Inicio { codificador: ex.usado.id.clone(), marca: ex.usado.marca.clone(), gpu: ex.usado.gpu, tarjeta: ex.gpu_nombre.clone(),
         bitrate: if opciones.mbps > 0.0 { opciones.mbps } else { ffmpeg::bitrate_auto(opciones.w, opciones.h, opciones.fps) } };
-    *s.export.lock().unwrap() = Some(ex);
-    *s.salida.lock().unwrap() = opciones.salida.clone();
+    // si había una exportación abandonada, se cierra antes de empezar la nueva (no deja FFmpeg colgado)
+    if let Some(vieja) = bloquear(&s.export).replace(ex) { vieja.cancelar(); }
+    *bloquear(&s.salida) = opciones.salida.clone();
     Ok(r)
 }
+
+/// Borra el video a medias: un .mp4 incompleto engaña más que un archivo que no existe.
+fn borrar_parcial(s: &Estado) { let r = bloquear(&s.salida).clone(); if !r.is_empty() { let _ = std::fs::remove_file(r); } }
 
 #[tauri::command]
 async fn exportar_cuadro(s: State<'_, Estado>, request: Request<'_>) -> R<u64> {
     let InvokeBody::Raw(b) = request.body() else { return Err("falta el cuadro".into()) };
-    let mut g = s.export.lock().unwrap();
+    let mut g = bloquear(&s.export);
     let ex = g.as_mut().ok_or("no hay exportación en curso")?;
-    if let Err(x) = ex.cuadro(b) { if let Some(ex) = g.take() { ex.cancelar(); } return Err(e(x)); }
+    if let Err(x) = ex.cuadro(b) { if let Some(ex) = g.take() { ex.cancelar(); } drop(g); borrar_parcial(&s); return Err(e(x)); }
     Ok(ex.cuadros)
 }
 
 #[tauri::command]
 async fn exportar_terminar(s: State<'_, Estado>) -> R<u64> {
-    let ex = s.export.lock().unwrap().take().ok_or("no hay exportación en curso")?;
-    ex.terminar().map_err(e)?;
-    let ruta = s.salida.lock().unwrap().clone();
+    let ex = bloquear(&s.export).take().ok_or("no hay exportación en curso")?;
+    if let Err(x) = ex.terminar() { borrar_parcial(&s); return Err(e(x)); }
+    let ruta = bloquear(&s.salida).clone();
     Ok(std::fs::metadata(ruta).map(|m| m.len()).unwrap_or(0))
 }
 #[tauri::command]
-async fn exportar_cancelar(s: State<'_, Estado>) -> R<()> { if let Some(ex) = s.export.lock().unwrap().take() { ex.cancelar(); } Ok(()) }
+async fn exportar_cancelar(s: State<'_, Estado>) -> R<()> { let ex = bloquear(&s.export).take(); if let Some(ex) = ex { ex.cancelar(); borrar_parcial(&s); } Ok(()) }
 
 fn base_auto(app: &AppHandle) -> PathBuf { carpeta_datos(app).join("autoguardado") }
 fn ahora_ms() -> u64 { std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0) }
@@ -116,8 +120,8 @@ async fn autoguardado_leer(app: AppHandle, ruta: String) -> R<String> { atrapa_c
 /// Si la sesión anterior no cerró bien, devuelve el proyecto guardado más reciente para recuperarlo.
 #[tauri::command]
 async fn autoguardado_recuperar(s: State<'_, Estado>) -> R<Option<(String, String)>> {
-    if !*s.cierre_inesperado.lock().unwrap() { return Ok(None); }
-    let Some(base) = s.auto_base.lock().unwrap().clone() else { return Ok(None) };
+    if !*bloquear(&s.cierre_inesperado) { return Ok(None); }
+    let Some(base) = bloquear(&s.auto_base).clone() else { return Ok(None) };
     Ok(atrapa_core::autoguardado::mas_reciente(&base).and_then(|(n, p, _)| std::fs::read_to_string(p).ok().map(|t| (n, t))))
 }
 
@@ -201,7 +205,7 @@ async fn relieve_estimar(s: State<'_, Estado>, app: AppHandle, request: Request<
     let dir = carpeta_datos(&app).join("modelos");
     let ap = app.clone();
     let modelo = relieve::asegurar_modelo(&dir, move |n, t| { let _ = ap.emit("relieve-progreso", serde_json::json!({"n": n, "total": t})); }).map_err(e)?;
-    let mut g = s.relieve.lock().unwrap();
+    let mut g = bloquear(&s.relieve);
     if g.is_none() { *g = Some(Relieve::cargar(&modelo, &lib).map_err(e)?); }
     let r = g.as_mut().unwrap();
     let (mapa, dw, dh) = r.estimar(rgba, w, h).map_err(e)?;
@@ -219,11 +223,11 @@ fn main() {
             let est: State<Estado> = app.state();
             {
                 let base = carpeta_datos(app.handle()).join("autoguardado");
-                *est.cierre_inesperado.lock().unwrap() = atrapa_core::autoguardado::iniciar_sesion(&base);
-                *est.auto_base.lock().unwrap() = Some(base);
+                *bloquear(&est.cierre_inesperado) = atrapa_core::autoguardado::iniciar_sesion(&base);
+                *bloquear(&est.auto_base) = Some(base);
             }
             if let Ok(rd) = app.path().resource_dir() {
-                *est.recursos.lock().unwrap() = Some(rd.clone());
+                *bloquear(&est.recursos) = Some(rd.clone());
                 let bin = rd.join("bin");
                 let ff = bin.join(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" });
                 if ff.exists() && std::env::var("ATRAPA_FFMPEG").is_err() { std::env::set_var("ATRAPA_FFMPEG", &ff); }
@@ -254,7 +258,7 @@ fn main() {
         .expect("no se pudo abrir Atrapacuentos Studio")
         .run(|app, ev| {
             if let tauri::RunEvent::Exit = ev {
-                if let Some(b) = app.state::<Estado>().auto_base.lock().unwrap().clone() { atrapa_core::autoguardado::cerrar_sesion(&b); }
+                if let Some(b) = bloquear(&app.state::<Estado>().auto_base).clone() { atrapa_core::autoguardado::cerrar_sesion(&b); }
             }
         });
 }
