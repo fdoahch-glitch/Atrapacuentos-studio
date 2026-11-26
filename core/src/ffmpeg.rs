@@ -70,6 +70,12 @@ pub struct Opciones {
     #[serde(default)] pub maestra: Option<String>,
     /// duración total en segundos (recorta el audio si sobra)
     #[serde(default)] pub duracion: f32,
+    /// Normaliza la mezcla final al objetivo habitual de plataformas (-14 LUFS, true peak -1.5 dBTP).
+    #[serde(default)] pub normalizar_lufs: bool,
+}
+
+fn filtro_lufs(activo: bool) -> Option<&'static str> {
+    if activo { Some("loudnorm=I=-14:TP=-1.5:LRA=11") } else { None }
 }
 fn h264() -> String { "h264".into() }
 
@@ -129,7 +135,10 @@ impl Exportacion {
         a.extend(["-r".to_string(), o.fps.to_string(), "-i".into(), "pipe:0".into()]);
         if let Some(au) = &o.audio { a.extend(["-i".to_string(), au.clone()]); }
         a.extend(["-map", "0:v"].map(String::from));
-        if o.audio.is_some() { a.extend(["-map", "1:a", "-c:a", "aac", "-b:a", "192k"].map(String::from)); }
+        if o.audio.is_some() {
+            a.extend(["-map", "1:a", "-c:a", "aac", "-b:a", "192k"].map(String::from));
+            if let Some(f) = filtro_lufs(o.normalizar_lufs) { a.extend(["-af".into(), f.into()]); }
+        }
         if o.duracion > 0.0 { a.extend(["-t".to_string(), format!("{:.3}", o.duracion)]); }
         a.extend(args_codificador(&enc, mbps, o.fps));
         // Las etiquetas de color (BT.709, rango limitado) se escriben en el flujo ya codificado. Con las opciones
@@ -145,7 +154,10 @@ impl Exportacion {
             // copia maestra sin pérdida visible (ProRes 422 HQ) para editar o volver a exportar
             if o.duracion > 0.0 { a.extend(["-t".to_string(), format!("{:.3}", o.duracion)]); }
             a.extend(["-map", "0:v", "-c:v", "prores_ks", "-profile:v", "3", "-pix_fmt", "yuv422p10le"].map(String::from));
-            if o.audio.is_some() { a.extend(["-map", "1:a", "-c:a", "pcm_s16le"].map(String::from)); }
+            if o.audio.is_some() {
+                a.extend(["-map", "1:a", "-c:a", "pcm_s16le"].map(String::from));
+                if let Some(f) = filtro_lufs(o.normalizar_lufs) { a.extend(["-af".into(), f.into()]); }
+            }
             a.push(m.clone());
         }
         let mut child = cmd(&ffmpeg_path()).args(&a).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::piped()).spawn().context("no se pudo abrir FFmpeg")?;
@@ -219,6 +231,12 @@ pub fn escribir_wav(ruta: &Path, sr: u32, canales: u16, f32s: &[f32]) -> Result<
 mod tests {
     use super::*;
     #[test]
+    fn normalizacion_lufs_se_activa_solo_si_se_pide() {
+        assert_eq!(filtro_lufs(true), Some("loudnorm=I=-14:TP=-1.5:LRA=11"));
+        assert_eq!(filtro_lufs(false), None);
+    }
+
+    #[test]
     fn reordena_yuv_empaquetado() {
         let (w, h) = (8usize, 4usize);
         let mut s = vec![0u8; w * h * 3 / 2];
@@ -238,7 +256,7 @@ mod tests {
         let wav = dir.join("a.wav");
         let s: Vec<f32> = (0..48000 * 2 * 2).map(|i| ((i / 2) as f32 * 440.0 * 6.2831 / 48000.0).sin() * 0.3).collect();
         escribir_wav(&wav, 48000, 2, &s).unwrap();
-        let o = Opciones { w: 320, h: 180, fps: 30, mbps: 4.0, codec: "h264".into(), codificador: None, salida: dir.join("o.mp4").to_string_lossy().into(), audio: Some(wav.to_string_lossy().into()), duracion: 2.0, maestra: Some(dir.join("m.mov").to_string_lossy().into()) };
+        let o = Opciones { w: 320, h: 180, fps: 30, mbps: 4.0, codec: "h264".into(), codificador: None, salida: dir.join("o.mp4").to_string_lossy().into(), audio: Some(wav.to_string_lossy().into()), duracion: 2.0, maestra: Some(dir.join("m.mov").to_string_lossy().into()), normalizar_lufs: true };
         let mut e = Exportacion::iniciar(&o, &lista).expect("iniciar");
         eprintln!("usa {} en {}", e.usado.id, e.gpu_nombre);
         for n in 0..60 { let mut f = vec![255u8; 320 * 180 * 4]; for y in 0..180 { for x in 0..320 { let i = (y * 320 + x) * 4; f[i] = ((x + n * 4) % 256) as u8; f[i + 1] = (y * 255 / 180) as u8; f[i + 2] = 90; } } e.cuadro(&f).unwrap(); }
@@ -267,7 +285,7 @@ mod tests {
         for (nombre, datos) in [("rgba", rgba.clone()), ("yuv", emp)] {
             for codec in ["h264", "hevc"] {
                 let salida = dir.join(format!("{nombre}_{codec}.mp4"));
-                let o = Opciones { w: w as u32, h: h as u32, fps: 30, mbps: 4.0, codec: codec.into(), codificador: None, salida: salida.to_string_lossy().into(), audio: None, duracion: 0.0, maestra: None };
+                let o = Opciones { w: w as u32, h: h as u32, fps: 30, mbps: 4.0, codec: codec.into(), codificador: None, salida: salida.to_string_lossy().into(), audio: None, duracion: 0.0, maestra: None, normalizar_lufs: false };
                 let mut e = Exportacion::iniciar(&o, &lista).unwrap();
                 for _ in 0..10 { e.cuadro(&datos).unwrap(); }
                 e.terminar().unwrap();
@@ -279,7 +297,7 @@ mod tests {
     }
 
     fn opts(salida: &str) -> Opciones {
-        Opciones { w: 64, h: 36, fps: 30, mbps: 1.0, codec: "h264".into(), codificador: Some("libx264".into()), salida: salida.into(), audio: None, maestra: None, duracion: 0.0 }
+        Opciones { w: 64, h: 36, fps: 30, mbps: 1.0, codec: "h264".into(), codificador: Some("libx264".into()), salida: salida.into(), audio: None, maestra: None, duracion: 0.0, normalizar_lufs: false }
     }
     fn cuadro_liso(n: u8) -> Vec<u8> { let mut f = vec![n; 64 * 36 * 4]; for p in f.chunks_mut(4) { p[3] = 255; } f }
 
