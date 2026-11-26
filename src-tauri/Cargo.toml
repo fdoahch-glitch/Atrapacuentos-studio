@@ -2,7 +2,7 @@
 name = "atrapacuentos-studio"
 version = "1.2.0"
 edition = "2021"
-description = "Atrapacuentos Studio: crea cuentos animados y expórtalos a MP4 con la tarjeta de video"
+description = "AtrapaCuentos Studio Master: crea cuentos animados y expórtalos a MP4 con la tarjeta de video"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
