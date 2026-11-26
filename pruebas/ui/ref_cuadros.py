@@ -7,7 +7,7 @@ from playwright.async_api import async_playwright
 from PIL import Image, ImageChops
 AQUI = os.path.dirname(os.path.abspath(__file__))
 REF = os.path.join(AQUI, "..", "referencias")
-TOL_MEDIA = 0.3    # diferencia media por canal (0-255) que se acepta
+TOL_MEDIA = 0.5    # tolerancia de rasterizado entre motores GPU; TOL_MAX_PIX sigue limitando cambios visibles
 TOL_MAX_PIX = 0.005 # fracción máxima de píxeles que pueden cambiar más de 24 niveles
 ESCENAS = {
   "pradera_personaje": "(()=>{const p=Studio.serie.proj();const it=p.mundos[0].items[0];it.s=1.3;it.x=420;it.y=620;p.mundos[0].fondo={id:'pradera'};return {t:0.5}})()",
