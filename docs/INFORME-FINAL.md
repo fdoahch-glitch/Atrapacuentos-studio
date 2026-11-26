@@ -1,4 +1,4 @@
-# Atrapacuentos Studio 1.2.0 — Informe de cierre (2026-11-23)
+# AtrapaCuentos Studio Master 1.2.0 — Informe de cierre (2026-11-23)
 
 Rama `mejoras-estudio`. Respaldo previo: etiqueta `respaldo-antes-de-mejoras-2026-11-22`.
 Nada existente fue eliminado ni simplificado; los proyectos antiguos siguen abriendo.
