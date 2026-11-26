@@ -375,14 +375,15 @@ function editor(host,ln,w){
   <div class="r"><span style="min-width:80px">Inicio</span><input class="eA" type="range" min="0" max="${dur.toFixed(2)}" step=".01" value="0" style="width:200px"><b class="eAv">0.00s</b></div>
   <div class="r"><span style="min-width:80px">Final</span><input class="eB" type="range" min="0" max="${dur.toFixed(2)}" step=".01" value="${dur.toFixed(2)}" style="width:200px"><b class="eBv">${dur.toFixed(2)}s</b></div>
   <div class="r"><span style="min-width:80px">Volumen</span><input class="eG" type="range" min="-12" max="12" step="1" value="0" style="width:200px"><b class="eGv">0 dB</b></div>
+  <div class="r"><span style="min-width:80px">Ruido</span><input class="eNR" type="range" min="0" max="100" step="5" value="0" style="width:200px"><b class="eNRv">0 %</b><small style="opacity:.7">Atenuación suave del ruido constante</small></div>
   <div class="r"><span style="min-width:80px">Fundido</span>entrada <input class="eFi" type="range" min="0" max="1" step=".05" value="0" style="width:90px"> salida <input class="eFo" type="range" min="0" max="1" step=".05" value="0" style="width:90px"></div>
   <div class="r"><span style="min-width:80px">Tono</span><select class="eT"><option value="-6">Muy grave (monstruo)</option><option value="-3">Grave</option><option value="0" selected>Normal</option><option value="3">Agudo</option><option value="6">Muy agudo (ratoncito)</option></select><small style="opacity:.7">cambiar el tono también cambia la velocidad</small></div>
   <div class="r"><label><input type="checkbox" class="eN"> Normalizar (volumen parejo)</label><button class="eS">Recortar silencios</button><button class="eP">▶ Escuchar</button><button class="eOk pri">✔ Aplicar cambios</button><button class="eO">Restaurar original</button></div></div>`;
   const q=c=>host.querySelector(c),cv=q(".wf");
   const draw=()=>wave(cv,au,+q(".eA").value,+q(".eB").value);
-  const upd=()=>{q(".eAv").textContent=(+q(".eA").value).toFixed(2)+"s";q(".eBv").textContent=(+q(".eB").value).toFixed(2)+"s";q(".eGv").textContent=q(".eG").value+" dB";draw();};
-  const opts=()=>({trimA:+q(".eA").value,trimB:Math.max(+q(".eB").value,+q(".eA").value+.05),gainDb:+q(".eG").value,fadeIn:+q(".eFi").value,fadeOut:+q(".eFo").value,semi:+q(".eT").value,normalize:q(".eN").checked});
-  ["eA","eB","eG"].forEach(c=>q("."+c).oninput=upd);
+  const upd=()=>{q(".eAv").textContent=(+q(".eA").value).toFixed(2)+"s";q(".eBv").textContent=(+q(".eB").value).toFixed(2)+"s";q(".eGv").textContent=q(".eG").value+" dB";q(".eNRv").textContent=q(".eNR").value+" %";draw();};
+  const opts=()=>({trimA:+q(".eA").value,trimB:Math.max(+q(".eB").value,+q(".eA").value+.05),gainDb:+q(".eG").value,fadeIn:+q(".eFi").value,fadeOut:+q(".eFo").value,semi:+q(".eT").value,normalize:q(".eN").checked,noiseReduction:+q(".eNR").value/100});
+  ["eA","eB","eG","eNR"].forEach(c=>q("."+c).oninput=upd);
   q(".eS").onclick=()=>{const [a,b]=DubFX.silenceBounds(au.buf);q(".eA").value=a;q(".eB").value=b;upd();};
   q(".eP").onclick=()=>{stopListen();const r=DubFX.process(au.buf,opts()),a=ac();if(a.state==="suspended")a.resume();const b=a.createBuffer(1,r.data.length,r.sr);b.copyToChannel(r.data,0);const s=a.createBufferSource();s.buffer=b;s.connect(a.destination);s.start();listen=s;};
   q(".eOk").onclick=async()=>{
