@@ -1,4 +1,4 @@
-# Instalar y actualizar Atrapacuentos Studio
+# Instalar y actualizar AtrapaCuentos Studio Master
 
 ## Instalar (Windows)
 1. En GitHub abre **Actions → la última ejecución verde → Artifacts → atrapacuentos-windows** (o, si ya hay una versión publicada, **Releases**).
