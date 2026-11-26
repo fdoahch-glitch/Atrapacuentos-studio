@@ -28,6 +28,7 @@ PRUEBAS = {
     "ref_cuadros.py": ["escenas de referencia: 5", "cambiadas: ninguna", "errores: []"],
     "anim2.py": ["errores: []"],
     "extras.py": ["'relampago': True", "controles: [True, True, True, True, True]", "errores: []"],
+    "ruido.py": ["ruido atenuado: True", "voz conservada: True"],
 }
 def servidor_listo():
     try: urllib.request.urlopen("http://localhost:8765/index.html", timeout=2); return True
