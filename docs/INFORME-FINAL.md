@@ -28,9 +28,9 @@ Nada existente fue eliminado ni simplificado; los proyectos antiguos siguen abri
 - 12 de 12 pruebas de interfaz (`python3 pruebas/correr_ui.py`), más pruebas Rust del núcleo y de la app real vía tauri-driver (Linux).
 
 ## Pendiente
-- **Fase 4:** biblioteca de sonidos con licencias, grabación, reducción de ruido, -14 LUFS, voz sintética, subtítulos, sincronía labial (omitida a pedido).
-- Voz local (TTS), más modelos de IA, mejoras de profundidad, optimización de render (etapa B con wgpu).
-- Pasar la exportación en segundo plano las nuevas opciones de exportación.
+- **Fase 4 — estado actualizado:** grabación y subtítulos ya existen; la atenuación suave de ruido constante ya está implementada con control y prueba automática; la normalización nativa a -14 LUFS / -1,5 dBTP ya está implementada como opción de exportación. La reducción actual es una compuerta adaptativa, no una restauración espectral. La biblioteca de sonidos con licencias y la voz sintética local siguen pendientes. La sincronía labial con voz se conserva; no se reactivó el flujo automático de IA que se había omitido a pedido.
+- Voz local (TTS) real, más modelos de IA verificables, mejoras de profundidad y optimización de render (etapa B con wgpu).
+- **Exportación en segundo plano:** ya existe en `serie_bg.js` mediante una copia del proyecto en un iframe aislado, cola, progreso, cancelación y descarga. Falta validar el flujo completo en una sesión real de escritorio y propagar a esa ruta las nuevas opciones (normalización LUFS y atenuación/procesamiento de audio cuando corresponda).
 
 ## Límites reales
 - La detección de partes es por silueta, no usa IA. Agrandar imagen es nitidez clásica, no IA.
@@ -57,4 +57,11 @@ Nada existente fue eliminado ni simplificado; los proyectos antiguos siguen abri
 - `web/js/gl2d.js`: contexto de dibujo propio sobre WebGL2 (relleno por estencil con regla del cero o par-impar, líneas con extremos/uniones/punteado, curvas, arcos, elipses, degradados lineales y radiales, transformaciones, transparencia, mezclas multiplicar/aclarar/borrar, imágenes con mipmaps, suavizado MSAA hasta 8x). No usa Canvas 2D para dibujar.
 - Prueba `gl2d.py`: 12 figuras comparadas con Canvas 2D del navegador (solo como regla de medir); las 12 dentro de tolerancia.
 - Decidido con el usuario: textos y subtítulos con una tipografía libre incluida en la app y dibujada como formas; sin WebGL2 la app avisa con un mensaje claro (sin respaldo en Canvas 2D).
-- Pendiente: probar `drawImage` entre contextos, conectar GL2D a `frame()` (fondos, decoración, relieve, efectos), un solo contexto WebGL2 compartido con el rig de personajes y el lector YUV, texto con tipografía incluida, desenfoque (`filter`) y `getImageData` de los pocos usos que quedan, mensaje sin WebGL2, y comparar las 5 escenas de referencia.
+- Estado de integración: `GL2D` sigue siendo un motor experimental independiente; todavía no sustituye el contexto 2D usado por `Serie.frame()`. Pendiente: completar compatibilidad de texto con tipografía vectorial incluida, `filter`/desenfoque, `drawImage` entre contextos y lectura de píxeles; después integrar por capas en `frame()` sin perder edición, miniaturas, relieve ni exportación. El uso de un contexto WebGL2 compartido con rig/YUV requiere rediseño coordinado de propiedad del contexto y no está implementado. También faltan el aviso de WebGL2 no disponible y la comparación visual final de las cinco escenas.
+
+
+## Actualización de ejecución — 2026-11-26
+- Atenuación suave de ruido constante: control en el estudio de grabación y prueba automática de conservación de voz.
+- Exportación nativa: normalización opcional `-14 LUFS`, pico máximo `-1,5 dBTP`, aplicada a AAC y al máster PCM.
+- Validación CI del commit `2aeb59b`: trabajo Windows completado correctamente; pruebas Rust y de interfaz Linux completadas correctamente; empaquetado/instaladores Linux todavía en ejecución al momento de esta actualización.
+- No se declara validación en equipos físicos AMD/NVIDIA/Intel ni en Windows 10/11 real: esos equipos no están disponibles desde CI.
