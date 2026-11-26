@@ -30,7 +30,7 @@ Nada existente fue eliminado ni simplificado; los proyectos antiguos siguen abri
 ## Pendiente
 - **Fase 4 — estado actualizado:** grabación y subtítulos ya existen; la atenuación suave de ruido constante ya está implementada con control y prueba automática; la normalización nativa a -14 LUFS / -1,5 dBTP ya está implementada como opción de exportación. La reducción actual es una compuerta adaptativa, no una restauración espectral. La biblioteca de sonidos con licencias y la voz sintética local siguen pendientes. La sincronía labial con voz se conserva; no se reactivó el flujo automático de IA que se había omitido a pedido.
 - Voz local (TTS) real, más modelos de IA verificables, mejoras de profundidad y optimización de render (etapa B con wgpu).
-- **Exportación en segundo plano:** ya existe en `serie_bg.js` mediante una copia del proyecto en un iframe aislado, cola, progreso, cancelación y descarga. Falta validar el flujo completo en una sesión real de escritorio y propagar a esa ruta las nuevas opciones (normalización LUFS y atenuación/procesamiento de audio cuando corresponda).
+- **Exportación en segundo plano:** ya existe en `serie_bg.js` mediante una copia del proyecto en un iframe aislado, cola, progreso, cancelación y descarga. Se actualizó la cola para conservar en la página de renderizado las opciones elegidas de normalización LUFS, máster y códec. Falta validar el flujo completo en una sesión real de escritorio; la atenuación de ruido se aplica al audio grabado/subido antes de la mezcla y no se vuelve a procesar automáticamente en el render aislado.
 
 ## Límites reales
 - La detección de partes es por silueta, no usa IA. Agrandar imagen es nitidez clásica, no IA.
