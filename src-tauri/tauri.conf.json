@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Atrapacuentos Studio",
+  "productName": "AtrapaCuentos Studio Master",
   "version": "1.2.0",
   "identifier": "cl.atrapacuentos.studio",
   "build": { "frontendDist": "../web" },
@@ -9,7 +9,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Atrapacuentos Studio",
+        "title": "AtrapaCuentos Studio Master",
         "width": 1400, "height": 860, "minWidth": 1000, "minHeight": 640,
         "backgroundColor": "#14162a",
         "dragDropEnabled": false,
