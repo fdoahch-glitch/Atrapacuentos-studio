@@ -59,7 +59,7 @@ function init(){
     }
     const maestra=$("expMaestra")&&$("expMaestra").checked?salida.replace(/\.mp4$/i,"")+"-maestra.mov":null;
     let info;
-    try{info=await Nativo.iniciar({w:W,h:H,fps,mbps:mb||0,codec,salida,audio,maestra,duracion:total/fps});}
+    try{info=await Nativo.iniciar({w:W,h:H,fps,mbps:mb||0,codec,salida,audio,maestra,duracion:total/fps,normalizar_lufs:!!($("expLufs")&&$("expLufs").checked)});}
     catch(e){$("expWarn").hidden=false;$("expWarn").textContent="No pude iniciar la exportación: "+e;show(true,false,false);busy=false;if(window.__onExportErr)__onExportErr(String(e));return;}
     const cv=$("cv"),eng=A.engine;eng.fijar(...ExportExtra.size(W,H));
     /* el cuadro se arma en un lienzo de la GPU y un shader lo convierte a YUV sin pasar por la CPU */
