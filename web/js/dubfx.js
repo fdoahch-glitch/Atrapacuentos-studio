@@ -12,6 +12,18 @@ function process(buf,o){
   const r=Math.pow(2,(o.semi||0)/12);
   if(Math.abs(r-1)>1e-3){const n=Math.max(1,Math.floor(seg.length/r)),out=new Float32Array(n);
     for(let i=0;i<n;i++){const p=i*r,k=Math.floor(p),f=p-k;out[i]=(seg[k]||0)*(1-f)+(seg[k+1]||0)*f;}seg=out;}
+  if(o.noiseReduction>0){
+    // Puerta suave adaptativa: estima el piso de ruido en los extremos y atenúa solo los bloques débiles.
+    // No sustituye una restauración espectral; evita cortar consonantes mediante ataque/liberación gradual.
+    const hop=Math.max(64,Math.round(sr*.01)),edge=Math.min(Math.round(sr*.3),Math.floor(seg.length/4));
+    const rms=(a,b)=>{let q=0,n=Math.max(1,b-a);for(let i=a;i<b;i+=2)q+=seg[i]*seg[i];return Math.sqrt(q/Math.max(1,Math.ceil(n/2)));};
+    const floor=Math.min(rms(0,edge),rms(Math.max(0,seg.length-edge),seg.length));
+    const threshold=Math.max(.0015,floor*2.6),amount=Math.max(0,Math.min(1,o.noiseReduction));let gain=1;
+    for(let a=0;a<seg.length;a+=hop){const b=Math.min(seg.length,a+hop),level=rms(a,b);let target=1;
+      if(level<threshold*2){const speech=Math.max(0,Math.min(1,(level/threshold-.25)/1.75));target=1-amount*(1-speech)*.85;}
+      gain+=(target-gain)*(target<gain?.55:.16);for(let i=a;i<b;i++)seg[i]*=gain;
+    }
+  }
   if(o.normalize){let m=0;for(let i=0;i<seg.length;i++)m=Math.max(m,Math.abs(seg[i]));if(m>1e-4){const k=.92/m;for(let i=0;i<seg.length;i++)seg[i]*=k;}}
   const g=Math.pow(10,(o.gainDb||0)/20);
   const fi=Math.round((o.fadeIn||0)*sr),fo=Math.round((o.fadeOut||0)*sr),n=seg.length;
