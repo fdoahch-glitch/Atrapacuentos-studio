@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Atrapacuentos Studio · Prueba de compatibilidad WebGPU</title>
+<style>
+:root{color-scheme:dark;font:15px system-ui;background:#12141c;color:#edf0ff}
+body{max-width:850px;margin:32px auto;padding:0 18px}
+h1{font-size:24px;color:#ffb347}p{line-height:1.5;color:#c8cce0}
+.card{background:#20243a;border:1px solid #394064;border-radius:12px;padding:16px;margin:12px 0}
+.row{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid #343a58}
+.row:last-child{border:0}.status{font-weight:700}.ok{color:#5ee09a}.bad{color:#ff8585}.warn{color:#ffd36b}
+button{border:0;border-radius:9px;background:#7a5cff;color:white;padding:10px 14px;font-weight:700}
+small{color:#aeb4ce}pre{white-space:pre-wrap;overflow-wrap:anywhere;color:#d8defe}
+</style>
+</head>
+<body>
+<h1>🔬 Diagnóstico WebGPU — Atrapacuentos Studio</h1>
+<p>Prueba aislada y no destructiva. No modifica el editor ni reemplaza WebGL2. Comprueba la API WebGPU, crea un dispositivo y ejecuta una operación de cómputo mínima.</p>
+<div class="card" id="results">
+ <div class="row"><span>Contexto seguro</span><span id="secure" class="status">Pendiente</span></div>
+ <div class="row"><span>navigator.gpu</span><span id="api" class="status">Pendiente</span></div>
+ <div class="row"><span>Adaptador GPU</span><span id="adapter" class="status">Pendiente</span></div>
+ <div class="row"><span>Dispositivo WebGPU</span><span id="device" class="status">Pendiente</span></div>
+ <div class="row"><span>Compute shader WGSL</span><span id="compute" class="status">Pendiente</span></div>
+ <div class="row"><span>Canvas WebGPU</span><span id="canvas" class="status">Pendiente</span></div>
+ <div class="row"><span>Respaldo WebGL2</span><span id="webgl" class="status">Pendiente</span></div>
+</div>
+<div class="card"><b>Resultado de cómputo</b><pre id="output">Esperando prueba…</pre></div>
+<div class="card"><b>Información técnica</b><pre id="details">—</pre></div>
+<button id="run">Volver a ejecutar pruebas</button>
+<script>
+const $=id=>document.getElementById(id);
+function set(id,text,kind){const e=$(id);e.textContent=text;e.className="status "+(kind||"");}
+async function run(){
+ for(const id of ["secure","api","adapter","device","compute","canvas","webgl"])set(id,"Comprobando…","warn");
+ $("output").textContent="Ejecutando…";$("details").textContent="";
+ set("secure",isSecureContext?"Sí":"No",isSecureContext?"ok":"bad");
+ set("api",navigator.gpu?"Disponible":"No disponible",navigator.gpu?"ok":"bad");
+ const info={userAgent:navigator.userAgent,platform:navigator.platform,secureContext:isSecureContext,webgpu:!!navigator.gpu};
+ let adapter=null,device=null;
+ try{
+  if(!navigator.gpu)throw new Error("El WebView/navegador no expone navigator.gpu.");
+  adapter=await navigator.gpu.requestAdapter({powerPreference:"high-performance"});
+  if(!adapter)throw new Error("No se pudo obtener un adaptador WebGPU.");
+  let ai={};try{ai=await adapter.requestAdapterInfo();}catch(_){}
+  info.adapter={vendor:ai.vendor||"no informado",architecture:ai.architecture||"no informada",device:ai.device||"no informado",description:ai.description||"no informada",features:[...adapter.features],limits:{maxBufferSize:adapter.limits.maxBufferSize,maxStorageBufferBindingSize:adapter.limits.maxStorageBufferBindingSize,maxComputeWorkgroupsPerDimension:adapter.limits.maxComputeWorkgroupsPerDimension}};
+  set("adapter",info.adapter.description+" · "+info.adapter.architecture,"ok");
+  device=await adapter.requestDevice();
+  set("device","Creado correctamente","ok");
+  device.lost.then(x=>{info.deviceLost={reason:x.reason,message:x.message};$("details").textContent=JSON.stringify(info,null,2);});
+  const shader=device.createShaderModule({label:"prueba-compute",code:`
+   @group(0) @binding(0) var<storage,read_write> data:array<u32>;
+   @compute @workgroup_size(64)
+   fn main(@builtin(global_invocation_id) id:vec3<u32>){
+    if(id.x<16u){data[id.x]=id.x*3u+7u;}
+   }`});
+  const pipeline=device.createComputePipeline({layout:"auto",compute:{module:shader,entryPoint:"main"}});
+  const buffer=device.createBuffer({size:64,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC});
+  const read=device.createBuffer({size:64,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+  const bind=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer}}]});
+  const enc=device.createCommandEncoder();const pass=enc.beginComputePass();pass.setPipeline(pipeline);pass.setBindGroup(0,bind);pass.dispatchWorkgroups(1);pass.end();enc.copyBufferToBuffer(buffer,0,read,0,64);device.queue.submit([enc.finish()]);
+  await read.mapAsync(GPUMapMode.READ);const values=[...new Uint32Array(read.getMappedRange().slice(0))];read.unmap();
+  const expected=Array.from({length:16},(_,i)=>i*3+7);
+  if(values.some((v,i)=>v!==expected[i]))throw new Error("El resultado del shader no coincide con el esperado.");
+  set("compute","Correcto · 16 valores verificados","ok");info.compute={success:true,values};
+  buffer.destroy();read.destroy();
+  const c=document.createElement("canvas");const ctx=c.getContext("webgpu");
+  if(ctx){const fmt=navigator.gpu.getPreferredCanvasFormat();ctx.configure({device,format:fmt,alphaMode:"opaque"});const enc2=device.createCommandEncoder();const view=ctx.getCurrentTexture().createView();const rp=enc2.beginRenderPass({colorAttachments:[{view,clearValue:{r:0.16,g:0.3,b:0.55,a:1},loadOp:"clear",storeOp:"store"}]});rp.end();device.queue.submit([enc2.finish()]);set("canvas","Contexto y render pass creados ("+fmt+")","ok");info.canvasWebGPU=true;}
+  else{set("canvas","No disponible","bad");info.canvasWebGPU=false;}
+  $("output").textContent="PRUEBA WEBGPU SUPERADA\nCompute shader ejecutado en GPU y resultado validado: "+values.join(", ");
+ }catch(e){
+  set("adapter",adapter?"Obtenido":"No disponible",adapter?"ok":"bad");
+  set("device",device?"Creado":"No disponible",device?"ok":"bad");
+  set("compute","No superada: "+e.message,"bad");
+  $("output").textContent="WEBGPU NO VALIDADO\n"+(e&&e.stack||e);
+  info.error=String(e&&e.stack||e);
+ }
+ try{const c=document.createElement("canvas"),g=c.getContext("webgl2");set("webgl",g?"Disponible":"No disponible",g?"ok":"bad");info.webgl2=!!g;}catch(e){set("webgl","Error: "+e.message,"bad");}
+ $("details").textContent=JSON.stringify(info,null,2);
+ if(device)device.destroy();
+}
+$("run").addEventListener("click",run);run();
+</script>
+</body></html>
