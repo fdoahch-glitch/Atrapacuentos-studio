@@ -48,8 +48,10 @@ function init(){
      usando NVENC (Nvidia), AMF (AMD) o Quick Sync (Intel). */
   async function nativo(W,H,fps,mb){
     const nm=((S.proj.nombre||"mi-cuento").replace(/[^\wáéíóúñÁÉÍÓÚÑ -]/g,"").trim()||"mi-cuento").replace(/\s+/g,"-");
-    const salida=await Nativo.elegirVideo(nm);
-    if(!salida){show(true,false,false);return;}
+    let salida=null;
+    try{salida=await Nativo.elegirVideo(nm);}
+    catch(e){$("expWarn").hidden=false;$("expWarn").textContent="No pude abrir la ventana para elegir dónde guardar el video: "+(e&&e.message||e);show(true,false,false);return;}
+    if(!salida){$("expWarn").hidden=false;$("expWarn").textContent="No elegiste dónde guardar el video. Pulsa «Crear video» otra vez y elige una carpeta.";show(true,false,false);return;}
     const total=Math.round(ExportExtra.dur(S.totalSeconds())*fps),codec=$("expCodec").value;
     let audio=null,noAudioMsg="";
     if(window.Dub&&Dub.hasAudio()){

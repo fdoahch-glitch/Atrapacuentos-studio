@@ -29,8 +29,9 @@ PRUEBAS = {
     "anim2.py": ["errores: []"],
     "extras.py": ["'relampago': True", "controles: [True, True, True, True, True]", "errores: []"],
     "ruido.py": ["ruido atenuado: True", "voz conservada: True"],
-    "version_boton.py": ["botón de nueva versión visible y clicable: True", "al pulsarlo muestra la versión y los cambios: True", "el botón sigue aunque se descarte el aviso: True", "sin novedades no hay botón: True", "errores: []"],
+    "version_boton.py": ["botón de nueva versión visible y clicable: True", "botón «🔄 Buscar actualizaciones» visible y clicable: True", "al pulsarlo abre la ventana de actualizaciones: True", "al pulsarlo muestra la versión y los cambios: True", "el botón sigue aunque se descarte el aviso: True", "sin novedades no hay botón: True", "errores: []"],
     "ventanas.py": ["Exportar, Exportar MP4, Crear video y Cerrar se pueden pulsar siempre: True", "errores: []"],
+    "csp.py": ["bloqueos de seguridad: 0", "pantalla de inicio centrada y a pantalla completa: True", "barra superior de una sola fila: True", "errores: []"],
     "gpu.py": ["motor GPU activo: True", "todas menores a 4: True", "modelo 3D: animaciones: ['caminar'] | se mueve: True | motor sigue activo: True", "errores: []"],
 }
 def servidor_listo():

@@ -174,6 +174,13 @@ async function revisar(conAviso){
   else if(!r.error)botonNueva(null);
   return r;
 }
+/* Botón fijo «🔄» para buscar actualizaciones a mano (solo en la aplicación de escritorio) */
+function botonBuscar(){
+  if(!inv||$("bBuscarAct"))return;const ref=$("bProj")||$("bPlayAll")||$("bPlay");if(!ref||!ref.parentNode)return;
+  const b=document.createElement("button");b.id="bBuscarAct";b.textContent="🔄";b.title="Buscar actualizaciones";b.onclick=()=>actualizaciones();ref.parentNode.insertBefore(b,ref);
+}
+if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",()=>setTimeout(botonBuscar,0));else botonBuscar();
+document.addEventListener("studio-ready",botonBuscar);
 (async()=>{
   if(inv){try{VER=await inv("version_app");}catch(e){}}
   if(!inv||lee("atr_upd_auto","1")==="0")return;
