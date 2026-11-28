@@ -39,15 +39,15 @@ function mesh(p,step){
   const cols=Math.max(2,Math.ceil(p.w/step)),rows=Math.max(2,Math.ceil(p.h/step)),pos=[],uv=[],idx=[];
   for(let j=0;j<=rows;j++)for(let i=0;i<=cols;i++){pos.push(p.x+i/cols*p.w,p.y+j/rows*p.h);uv.push(i/cols,j/rows);}
   for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){const a=j*(cols+1)+i,b=a+1,c=a+cols+1,d=c+1;idx.push(a,b,c,b,d,c);}
-  const m={pos:Float32Array.from(pos),nv:pos.length/2,n:idx.length,bp:gl.createBuffer(),bu:gl.createBuffer(),bi:gl.createBuffer()};
+  const m={pos:Float32Array.from(pos),uv:new Float32Array(uv),idx:new Uint16Array(idx),nv:pos.length/2,n:idx.length,bp:gl.createBuffer(),bu:gl.createBuffer(),bi:gl.createBuffer()};
   gl.bindBuffer(gl.ARRAY_BUFFER,m.bu);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(uv),gl.STATIC_DRAW);
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,m.bi);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(idx),gl.STATIC_DRAW);return m;
 }
 async function prepOne(def){
   for(const p of def.piezas){
-    const a=await loadImg(p.img);if(!a)continue;p._t=tex(a);
-    if(p.alt){const b=await loadImg(p.alt);if(b)p._t2=tex(b);}
-    if(p.alts){p._ta={};for(const k in p.alts){const b=await loadImg(p.alts[k]);if(b)p._ta[k]=tex(b);}}
+    const a=await loadImg(p.img);if(!a)continue;p._t=tex(a);p._im=a;
+    if(p.alt){const b=await loadImg(p.alt);if(b){p._t2=tex(b);p._im2=b;}}
+    if(p.alts){p._ta={};p._ima={};for(const k in p.alts){const b=await loadImg(p.alts[k]);if(b){p._ta[k]=tex(b);p._ima[k]=b;}}}
     const st=p.m&&p.m.wave?20:(p.n==="base"||p.n==="cuerpo"?28:40);p._mesh=mesh(p,st);
   }
 }
@@ -155,15 +155,14 @@ function deform(p,P,t,po){
     for(let k=0;k<ms.nv;k++){const x=P[k*2],y=P[k*2+1],dist=Math.hypot(ms.pos[k*2]-d.cx,ms.pos[k*2+1]-d.cy),w=1-sm(d.r*.25,d.r,dist);if(w<=0)continue;
       let nx=x,ny=y;if(ra){const r=rot(x,y,d.px,d.py,ra*w);nx=r[0];ny=r[1];}if(d.sc){const f=1+(sc-1)*w;nx=d.px+(nx-d.px)*f;ny=d.py+(ny-d.py)*f;}P[k*2]=nx;P[k*2+1]=ny;}}}
 }
-/* dibuja el personaje dentro de ctx. o: ax,ay,s,flip,t,walk,speak,hz,vis,expr,acts,aim,fwd,run,rot,seed,alpha */
-function draw(ctx,def0,o){
+/* Calcula, para el instante t, dónde queda cada vértice de cada pieza (en píxeles del lienzo) y qué imagen le toca.
+   Es la parte «matemática» del dibujo: la usan tanto el dibujo clásico (draw, abajo) como el compositor GPU (gpu_escena.js).
+   Cada resultado: {p: pieza, ms: malla, out: Float32Array(x,y,...), key: ""|"2"|"a:<nombre>" (qué imagen de la pieza usar)}. */
+function partes(def0,o){
   let def=def0;if(o.vista&&def0.vistas&&def0.vistas[o.vista])def=def0.vistas[o.vista];
-  if(!def0._ok||!gl)return false;
-  const W=ctx.canvas.width,H=ctx.canvas.height;
-  if(gl_cv.width!==W||gl_cv.height!==H){gl_cv.width=W;gl_cv.height=H;}
-  gl.viewport(0,0,W,H);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);gl.useProgram(pr);gl.uniform2f(uR,W,H);
+  if(!def0._ok)return null;
   const po=pose(def,o.t,o);po.walk=o.walk||0;po.hz=o.hz;po.run=o.run;
-  const fx=def.feet[0],fy=def.feet[1],fl=(o.flip<0?-1:1)*(def.face||1),s=o.s,ra=o.rot||0,S=po.S;
+  const fx=def.feet[0],fy=def.feet[1],fl=(o.flip<0?-1:1)*(def.face||1),s=o.s,ra=o.rot||0,S=po.S,R=[];
   for(const p of def.piezas){
     if(!p._mesh||!p._t)continue;const ms=p._mesh,P=Float32Array.from(ms.pos),pp=po.parts[p.n];
     deform(p,P,o.t,po);
@@ -180,18 +179,32 @@ function draw(ctx,def0,o){
       if(ra){const r3=rot(X,Y,o.ax,o.ay,ra);X=r3[0];Y=r3[1];}
       out[i*2]=X;out[i*2+1]=Y;
     }
+    let key="";
+    if(p._ta){let sp="";if(S.speak>.12){if(p._ta["v"+(S.vis||1)])sp="a:v"+(S.vis||1);else if(p._t2)sp="2";}
+      key=sp||(S.expr&&p._ta["e_"+S.expr]?"a:e_"+S.expr:"");}
+    else if(p._t2&&p.m&&p.m.sw&&S.speak>.28)key="2";
+    R.push({p,ms,out,key});
+  }
+  return R;
+}
+/* dibuja el personaje dentro de ctx. o: ax,ay,s,flip,t,walk,speak,hz,vis,expr,acts,aim,fwd,run,rot,seed,alpha */
+function draw(ctx,def0,o){
+  if(!def0._ok||!gl)return false;
+  const W=ctx.canvas.width,H=ctx.canvas.height;
+  if(gl_cv.width!==W||gl_cv.height!==H){gl_cv.width=W;gl_cv.height=H;}
+  gl.viewport(0,0,W,H);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);gl.useProgram(pr);gl.uniform2f(uR,W,H);
+  const R=partes(def0,o);if(!R)return false;
+  for(const {p,ms,out,key} of R){
     gl.bindBuffer(gl.ARRAY_BUFFER,ms.bp);gl.bufferData(gl.ARRAY_BUFFER,out,gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(lp);gl.vertexAttribPointer(lp,2,gl.FLOAT,false,0,0);
     gl.bindBuffer(gl.ARRAY_BUFFER,ms.bu);gl.enableVertexAttribArray(lu);gl.vertexAttribPointer(lu,2,gl.FLOAT,false,0,0);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ms.bi);
-    let T=p._t;
-    if(p._ta){const sp=S.speak>.12?(p._ta["v"+(S.vis||1)]||p._t2):null;T=sp||(S.expr&&p._ta["e_"+S.expr])||p._t;}
-    else if(p._t2&&p.m&&p.m.sw&&S.speak>.28)T=p._t2;
+    const T=key===""?p._t:key==="2"?p._t2:p._ta[key.slice(2)];
     gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,T);gl.uniform1i(uT,0);
     gl.drawElements(gl.TRIANGLES,ms.n,gl.UNSIGNED_SHORT,0);
   }
   ctx.save();ctx.globalAlpha=o.alpha===undefined?1:o.alpha;ctx.drawImage(gl_cv,0,0);ctx.restore();return true;
 }
-function freeOne(def){for(const p of def.piezas){if(p._t)gl.deleteTexture(p._t);if(p._t2)gl.deleteTexture(p._t2);if(p._ta)for(const k in p._ta)gl.deleteTexture(p._ta[k]);p._t=p._t2=p._ta=null;p._mesh=null;}}
+function freeOne(def){for(const p of def.piezas){if(p._t)gl.deleteTexture(p._t);if(p._t2)gl.deleteTexture(p._t2);if(p._ta)for(const k in p._ta)gl.deleteTexture(p._ta[k]);p._t=p._t2=p._ta=null;p._im=p._im2=p._ima=null;p._mesh=null;}}
 function liberar(def){if(!def||!gl)return;freeOne(def);if(def.vistas)for(const k in def.vistas)freeOne(def.vistas[k]);def._ok=false;def._prom=null;}
-window.SerieRig={fisDef,prep,draw,liberar,pose,ACC,ok:()=>initGL()};
+window.SerieRig={fisDef,prep,draw,partes,liberar,pose,ACC,ok:()=>initGL()};
 })();

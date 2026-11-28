@@ -7,9 +7,9 @@
 (function(){
 "use strict";
 const LS="atr_motor_grafico";
-const G={activo:false,motor:"2d",estado:"apagado",canvas:null,W:0,H:0,fallo:"",ultimoMs:0};
+let tmrPend=0;const G={pendientes:0,activo:false,motor:"2d",estado:"apagado",canvas:null,W:0,H:0,fallo:"",ultimoMs:0};
 let B=null,E=null,scene=null,cam=null,api=null;
-const texs=new Map(),mats=new Map(),capasBg=new Map(),quads=[],prox=[];let usados=0,usadosProx=0;
+const texs=new Map(),mats=new Map(),capasBg=new Map(),quads=[],prox=[];let usados=0,usadosProx=0,cnt=0;
 const pref=()=>{try{return localStorage.getItem(LS)||"2d";}catch(e){return "2d";}};
 const guardar=v=>{try{localStorage.setItem(LS,v);}catch(e){}};
 
@@ -33,7 +33,7 @@ function plano(){
 }
 /* coloca un plano: centro (cx,cy) en píxeles de lienzo (y hacia abajo), tamaño w×h, giro en radianes (horario, como el Canvas 2D) */
 function ubicar(q,mat,cx,cy,w,h,rot,op,orden){
-  q.material=mat;q.position.set(cx-G.W/2,G.H/2-cy,0);q.scaling.set(w,h,1);q.rotation.z=-(rot||0);q.visibility=op==null?1:op;q.alphaIndex=orden;
+  q.material=mat;q.position.set(cx-G.W/2,G.H/2-cy,0);q.scaling.set(w,h,1);q.rotation.z=-(rot||0);q.visibility=op==null?1:op;q.alphaIndex=cnt++;
 }
 /* camino de respaldo: el elemento se dibuja con el código clásico en un lienzo 2D del tamaño del cuadro y se sube como textura */
 function proxy(){
@@ -97,16 +97,88 @@ function dibujarFondo(sc,cam1,sx,t){
 }
 const IC=new WeakMap();
 function imgCanvas(im){
+  if(typeof HTMLCanvasElement!=="undefined"&&im instanceof HTMLCanvasElement)return im;
   let c=IC.get(im);if(c)return c;
   const k=Math.min(1,4096/Math.max(im.width,im.height));c=document.createElement("canvas");c.width=Math.max(1,Math.round(im.width*k));c.height=Math.max(1,Math.round(im.height*k));
   c.getContext("2d").drawImage(im,0,0,c.width,c.height);IC.set(im,c);return c;
 }
 
+/* ---------- personajes nativos en GPU ---------- */
+const piezasMesh=new WeakMap(),usoPz=new Map(),todosPz=[],idImg=new WeakMap();let nImg=0,matElip=null;
+const idDe=im=>{let i=idImg.get(im);if(!i){i=++nImg;idImg.set(im,i);}return i;};
+function imagenDe(p,key){return key===""?p._im:key==="2"?p._im2:(p._ima&&p._ima[key.slice(2)]);}
+function matPieza(p,key,oscura){
+  const im=imagenDe(p,key);if(!im)return null;const id=idDe(im),k="pz:"+id+(oscura?":"+oscura:"");let m=mats.get(k);if(m)return m;
+  const tk="pzt:"+id,tex=texDeCanvas(tk,imgCanvas(im),true);
+  m=new B.StandardMaterial("m_"+k,scene);m.diffuseTexture=tex;m.useAlphaFromDiffuseTexture=true;m.disableLighting=true;
+  m.emissiveColor=oscura?B.Color3.FromHexString(oscura):B.Color3.White();m.backFaceCulling=false;m.transparencyMode=B.Material.MATERIAL_ALPHABLEND;m.disableDepthWrite=true;
+  mats.set(k,m);return m;
+}
+function matElipse(){
+  if(matElip)return matElip;
+  const cv=document.createElement("canvas");cv.width=cv.height=128;const g=cv.getContext("2d"),gr=g.createRadialGradient(64,64,0,64,64,64);
+  gr.addColorStop(0,"rgba(15,35,20,1)");gr.addColorStop(.6,"rgba(15,35,20,.7)");gr.addColorStop(1,"rgba(15,35,20,0)");g.fillStyle=gr;g.fillRect(0,0,128,128);
+  matElip=matDe("elipse",texDeCanvas("elipse",cv,false));return matElip;
+}
+function entradaPieza(p,ms){
+  let arr=piezasMesh.get(p);if(!arr){arr=[];piezasMesh.set(p,arr);}
+  const n=usoPz.get(p)||0;usoPz.set(p,n+1);let e=arr[n];
+  if(!e||e.nv!==ms.nv){
+    const nv=ms.nv,uv=new Float32Array(nv*2);for(let i=0;i<nv;i++){uv[i*2]=ms.uv[i*2];uv[i*2+1]=1-ms.uv[i*2+1];}
+    const m=new B.Mesh("pz",scene),vd=new B.VertexData();vd.positions=new Float32Array(nv*3);vd.indices=Array.from(ms.idx);vd.uvs=uv;vd.colors=new Float32Array(nv*4).fill(1);vd.applyToMesh(m,true);
+    m.isPickable=false;m.alwaysSelectAsActiveMesh=true;m.doNotSyncBoundingInfo=true;m.hasVertexAlpha=false;
+    e={mesh:m,sh:null,nv,pos:new Float32Array(nv*3),xy:new Float32Array(nv*2),col:new Float32Array(nv*4).fill(1),spos:new Float32Array(nv*3)};arr[n]=e;todosPz.push(e);
+  }
+  return e;
+}
+function sombraMalla(e){
+  if(e.sh)return e.sh;
+  const m=new B.Mesh("pzs",scene),vd=new B.VertexData(),nv=e.nv,src=e.mesh;
+  vd.positions=new Float32Array(nv*3);vd.indices=Array.from(src.getIndices());vd.uvs=Array.from(src.getVerticesData(B.VertexBuffer.UVKind));vd.colors=new Float32Array(nv*4).fill(1);vd.applyToMesh(m,true);
+  m.isPickable=false;m.alwaysSelectAsActiveMesh=true;m.doNotSyncBoundingInfo=true;m.hasVertexAlpha=true;
+  /* la sombra de todas las piezas se junta en una sola silueta: con el stencil cada píxel se pinta una vez, así no se oscurece donde se cruzan */
+  m.onBeforeDrawObservable.add(()=>{if(G.sinStencil)return;E.setStencilBuffer(true);E.setStencilMask(255);E.setStencilFunction(B.Constants.EQUAL);E.setStencilFunctionReference(0);E.setStencilOperationPass(B.Constants.INCR);});
+  m.onAfterRenderObservable.add(()=>{E.setStencilBuffer(false);});
+  e.sh=m;return m;
+}
+function actorNativo(def,RO,info){
+  const R=api.Rig.partes(def,RO);if(!R)return;
+  const {X,Y,ELL,giroSq,hora,sombra,sx,ht}=info,W=G.W,H=G.H,sq=giroSq<1;
+  if(ELL){const q=plano();ubicar(q,matElipse(),ELL.cx,ELL.cy,ELL.sw*2,ELL.sh*2,0,ELL.al,0);}
+  const lista=[];
+  for(const r of R){
+    const e=entradaPieza(r.p,r.ms),out=r.out,nv=e.nv;
+    for(let i=0;i<nv;i++){let x=out[i*2];const y=out[i*2+1];if(sq)x=X+(x-X)*giroSq;e.xy[i*2]=x;e.xy[i*2+1]=y;e.pos[i*3]=x-W/2;e.pos[i*3+1]=H/2-y;e.pos[i*3+2]=0;}
+    lista.push([r,e]);
+  }
+  if(sombra!=="suave"){
+    const lk=hora==="tarde"?[1.0,.5,.4]:hora==="noche"?[.3,.3,.2]:[.35,.22,.34],oy=Y+2*sx,col=hora==="noche"?"#0a1020":"#0c1c12";
+    for(const [r,e] of lista){
+      const m=matPieza(r.p,r.key,col);if(!m)continue;const sh=sombraMalla(e),pos=e.spos,cl=e.col;
+      for(let i=0;i<e.nv;i++){const x=e.xy[i*2],y=e.xy[i*2+1],dx=x-X,dy=y-oy;pos[i*3]=X+dx-lk[0]*dy-W/2;pos[i*3+1]=H/2-(oy+lk[1]*dy);pos[i*3+2]=0;
+        const f=Math.max(0,Math.min(1,(Y-y)/Math.max(1,ht)));cl[i*4+3]=1+(.2-1)*f;}
+      sh.updateVerticesData(B.VertexBuffer.PositionKind,pos);sh.updateVerticesData(B.VertexBuffer.ColorKind,cl);
+      sh.material=m;sh.visibility=lk[2];sh.alphaIndex=cnt++;sh.setEnabled(true);
+    }
+  }
+  for(const [r,e] of lista){
+    const m=matPieza(r.p,r.key,"");if(!m)continue;
+    e.mesh.updateVerticesData(B.VertexBuffer.PositionKind,e.pos);e.mesh.material=m;e.mesh.visibility=1;e.mesh.alphaIndex=cnt++;e.mesh.setEnabled(true);
+  }
+}
+
 /* ---------- elementos ---------- */
-const TAU=Math.PI*2;
+let scratch=null;const TAU=Math.PI*2;
 function dibujarItem(sc,it,t,cam0,sx,orden,opt){
   const z=cam0.z,dd=it.d==null?60:it.d,dof=(sc.look&&sc.look.dof)||0;
-  if(it.kind==="actor"||(dof>0&&dd<48)){aProxy(sc,it,t,cam0,sx,orden,opt);return;}
+  if(it.kind==="actor"){
+    const Pa=api.pos(it,t);
+    /* con opacidad parcial (entradas/salidas) las piezas se verían a través unas de otras: ese caso va por el camino clásico */
+    if((Pa.op==null?1:Pa.op)<.999||(dof>0&&dd<48)){aProxy(sc,it,t,cam0,sx,orden,opt);return;}
+    if(!scratch){scratch=document.createElement("canvas");scratch.width=scratch.height=2;}
+    api.drawItem(scratch.getContext("2d"),sc,it,t,cam0,sx,Object.assign({},opt,{gpuActor:actorNativo}));return;
+  }
+  if(dof>0&&dd<48){aProxy(sc,it,t,cam0,sx,orden,opt);return;}
   const P=api.pos(it,t),pf=api.pfOf(it.d),cx0=api.UW()/2;
   const X=((P.x-cam0.x*pf-cx0)*z+cx0)*sx,Y=((P.y-cam0.y*pf*.5-360)*z+360)*sx,k=(P.s||1)*z*sx,op=Math.max(0,Math.min(1,P.op==null?1:P.op));
   if(it.kind==="deco"){
@@ -143,9 +215,9 @@ G.iniciar=async function(motor){
     cv.style.cssText="position:fixed;left:-99999px;top:0;width:320px;height:180px;pointer-events:none";document.body.appendChild(cv);
     if(motor==="webgpu"){
       if(!navigator.gpu)throw new Error("WebGPU no está disponible");
-      E=new B.WebGPUEngine(cv,{antialias:true,adaptToDeviceRatio:false,powerPreference:"high-performance"});await E.initAsync();
+      E=new B.WebGPUEngine(cv,{antialias:true,stencil:true,adaptToDeviceRatio:false,powerPreference:"high-performance"});await E.initAsync();
     }else{
-      E=new B.Engine(cv,true,{preserveDrawingBuffer:true,stencil:false,powerPreference:"high-performance",adaptToDeviceRatio:false},false);
+      E=new B.Engine(cv,true,{preserveDrawingBuffer:true,stencil:true,powerPreference:"high-performance",adaptToDeviceRatio:false},false);
       if(E.webGLVersion<2)throw new Error("WebGL2 no está disponible");
     }
     E.setHardwareScalingLevel(1);
@@ -194,13 +266,16 @@ G.render=function(sc,t,W,H,cam0,cam1,orden,opt){
   if(!G.activo||!scene)return false;
   const a0=performance.now();
   try{
-    medir(W,H);usados=0;usadosProx=0;
+    medir(W,H);usados=0;usadosProx=0;cnt=0;usoPz.clear();for(const e of todosPz){e.mesh.setEnabled(false);if(e.sh)e.sh.setEnabled(false);}
     const sx=W/api.UW();
     let n=dibujarFondo(sc,cam1,sx,t);
     n=100;
     for(const it of orden){if(it.oculto)continue;dibujarItem(sc,it,t,cam0,sx,n++,opt);}
     if(sc.hora==="tarde"||sc.hora==="noche"){const q=plano();ubicar(q,matHora(sc.hora),W/2,H/2,W,H,0,1,n++);}
     for(let i=usados;i<quads.length;i++)quads[i].setEnabled(false);
+    /* si algún shader aún se está compilando (pasa solo la primera vez que aparece algo nuevo), este cuadro sale por el dibujo clásico y se repite enseguida */
+    let pend=false;for(const m of scene.meshes)if(m.isEnabled()&&!m.isReady(true))pend=true;
+    if(pend){G.pendientes++;clearTimeout(tmrPend);tmrPend=setTimeout(()=>{try{if(window.Studio&&Studio.refit)Studio.refit();}catch(x){}},70);return false;}
     E.beginFrame();scene.render();E.endFrame();
     G.ultimoMs=performance.now()-a0;return true;
   }catch(e){
@@ -210,6 +285,8 @@ G.render=function(sc,t,W,H,cam0,cam1,orden,opt){
     return false;
   }
 };
+G._top=()=>scene.meshes.filter(m=>m.isEnabled()).sort((a,b)=>b.alphaIndex-a.alphaIndex).slice(0,3).map(m=>[m.name,m.alphaIndex,m.material&&m.material.name,m.isReady(true),m.visibility]);
+G._dbg2=()=>({piezas:todosPz.length,activos:scene.meshes.filter(m=>m.isEnabled()).length,pz:scene.meshes.filter(m=>m.name==="pz"&&m.isEnabled()).map(m=>[!!m.material,m.visibility,m.alphaIndex,m.getTotalVertices(),m.isReady(true),m.material&&m.material.isReady(m)]).slice(0,5)});
 G._dbg=()=>({scene:scene.isReady(),meshes:scene.meshes.map(m=>[m.name,m.isEnabled(),m.isReady(true),m.material&&m.material.isReady(m)]),pend:scene._pendingData&&scene._pendingData.length,texturas:scene.textures.map(t=>[t.name,t.isReady()])});
 G.preferencia=pref;
 G.elegir=async function(v){

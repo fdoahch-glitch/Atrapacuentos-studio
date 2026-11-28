@@ -207,11 +207,14 @@ function drawItemIn(g,sc,it,t,cam,sx,opt){
      if(def.vistas&&def.vistas.perfil)giroPerfil=!!par;else if(par)fl=-fl;}
     const vista=def.vistas&&(wk>.12||giroPerfil)?"perfil":"";
     const f=def.feet,wd=def.w*gk,ht=def.h*gk;
-    {const lx=sc.hora==="tarde"?.55:sc.hora==="noche"?.12:.12,sw=wd*(.34+Math.abs(lx)*.5),sh=Math.max(6*sx,wd*.05),al=(sc.sombra==="suave"?1:.55)*(sc.hora==="noche"?.16:.3),cx=X+lx*wd*.35*(it.flip?-1:1)*0+lx*wd*.3,gr=g.createRadialGradient(cx,Y+3*sx,0,cx,Y+3*sx,sw);
+    let ELL=null;
+    {const lx=sc.hora==="tarde"?.55:sc.hora==="noche"?.12:.12,sw=wd*(.34+Math.abs(lx)*.5),sh=Math.max(6*sx,wd*.05),al=(sc.sombra==="suave"?1:.55)*(sc.hora==="noche"?.16:.3),cx=X+lx*wd*.35*(it.flip?-1:1)*0+lx*wd*.3,gr=g.createRadialGradient(cx,Y+3*sx,0,cx,Y+3*sx,sw);ELL={cx,cy:Y+3*sx,sw,sh,al};
       gr.addColorStop(0,"rgba(15,35,20,"+al+")");gr.addColorStop(.6,"rgba(15,35,20,"+(al*.7).toFixed(3)+")");gr.addColorStop(1,"rgba(15,35,20,0)");
-      g.save();g.translate(cx,Y+3*sx);g.scale(1,sh/sw);g.translate(-cx,-(Y+3*sx));g.fillStyle=gr;g.beginPath();g.arc(cx,Y+3*sx,sw,0,TAU);g.fill();g.restore();}
+      if(!(opt&&opt.gpuActor)){g.save();g.translate(cx,Y+3*sx);g.scale(1,sh/sw);g.translate(-cx,-(Y+3*sx));g.fillStyle=gr;g.beginPath();g.arc(cx,Y+3*sx,sw,0,TAU);g.fill();g.restore();}}
     const RO={ax:X,ay:Y,s:gk,flip:fl,t:t+hash(it.uid)%7,walk:wk,speak:it.dubLv||0,vis:it.dubVis||0,hz:(it.paso||1)*(gaitOf(it).hz||1),gait:gaitOf(it),run:(it.paso||1)*(gaitOf(it).hz||1)>1.45,stride:(P.speed/(def.esc*(P.s||1)))/((it.paso||1)*(gaitOf(it).hz||1)*((it.paso||1)*(gaitOf(it).hz||1)>1.45?1.8:1)),velFn:tau=>((posAt(it,tau+.03).x-posAt(it,tau-.03).x)/.06)/(def.esc*(P.s||1))*fl*(def.face||1),acts,aim,sec:it.sec,fq:window.FisQ||1,vient:(sc.viento!=null?sc.viento:(sc.atm==="viento"?.6:0)),expr:it.expr||it.dubExpr||"",vista,fwd:P.vl/200*fl,rot:P.r,seed:hash(it.uid)%5,alpha:g.globalAlpha};
-    if(sc.sombra!=="suave"){
+    /* compositor GPU: él mismo dibuja la sombra y las piezas; aquí solo se le entrega todo lo calculado */
+    if(opt&&opt.gpuActor){opt.gpuActor(def,RO,{X,Y,gk,ht,wd,giroSq,ELL,hora:sc.hora,sombra:sc.sombra,sx});}
+    else if(sc.sombra!=="suave"){
       const Wc=g.canvas.width,Hc=g.canvas.height,M=g.getTransform();SIL.a=SIL.a&&SIL.a.width===Wc&&SIL.a.height===Hc?SIL.a:mkc(Wc,Hc);SIL.b=SIL.b&&SIL.b.width===Wc&&SIL.b.height===Hc?SIL.b:mkc(Wc,Hc);
       const og=SIL.a.getContext("2d");og.setTransform(1,0,0,1,0,0);og.clearRect(0,0,Wc,Hc);og.setTransform(M);og.globalAlpha=g.globalAlpha;
       if(giroSq<1){og.save();og.translate(X,0);og.scale(giroSq,1);og.translate(-X,0);Rig.draw(og,def,RO);og.restore();}else Rig.draw(og,def,RO);og.setTransform(1,0,0,1,0,0);og.globalAlpha=1;
@@ -255,7 +258,7 @@ function bgCamAt(sc,cam,t){
 /* elementos de la escena en orden de dibujo (lo más lejano primero) */
 function ordenDe(sc){return sc.items.map((it,i)=>[it,i]).sort((a,b)=>((a[0].d==null?60:a[0].d)-(b[0].d==null?60:b[0].d))||a[1]-b[1]).map(x=>x[0]);}
 /* puente para el compositor GPU (gpu_escena.js): le presta la matemática del dibujo clásico para que ambos coincidan */
-window.SerieGpuApi={A,SPD,BGS,UW,UH,hash,drawItem,drawBg,pfOf,IMG:()=>IMG,pos:(it,t)=>entSal(it,t,itemPos(it,t))};
+window.SerieGpuApi={A,Rig,SPD,BGS,UW,UH,hash,drawItem,drawBg,pfOf,IMG:()=>IMG,pos:(it,t)=>entSal(it,t,itemPos(it,t))};
 function frame(g,sc,t,opt){
   const W=g.canvas.width,sx=W/UW();g.clearRect(0,0,W,g.canvas.height);
   const cam=camAt(sc,t),cam1=bgCamAt(sc,cam,t),L=ordenDe(sc);
