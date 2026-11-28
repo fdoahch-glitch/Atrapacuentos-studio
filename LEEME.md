@@ -28,3 +28,10 @@ Al subir cambios a GitHub, **Actions** compila y deja los instaladores en «Arti
 - `core/` – núcleo Rust: conversión de cuadros en la GPU (wgpu), detección de codificadores, FFmpeg, relieve con IA.
 - `src-tauri/` – la aplicación (ventana, menús, comandos).
 - `web/` – la interfaz del Studio (se muestra dentro de la ventana nativa).
+
+## 🎮 Motor gráfico GPU (nuevo, en prueba)
+En **💾 Proyecto → Motor gráfico** puedes elegir *Clásico (Canvas 2D)*, *GPU · WebGL2* o *GPU · WebGPU* (Babylon.js, incluido en el programa).
+Con GPU, el fondo, la decoración, las imágenes, los personajes por piezas y los **modelos 3D (.glb)** se dibujan directamente en la tarjeta de video,
+con mejor nitidez (mipmaps, filtrado anisotrópico) y lo mismo en la exportación a MP4. Si algo falla, el programa vuelve solo al dibujo clásico.
+Los modelos 3D se agregan desde **Mis imágenes → Modelo 3D (.glb)** y se mezclan con tus dibujos 2D y 2,5D en la misma escena.
+Detalles, límites y qué falta: `docs/MOTOR-GPU.md`.
