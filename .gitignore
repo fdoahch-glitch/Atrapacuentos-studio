@@ -5,3 +5,4 @@ src-tauri/gen/
 app/
 node_modules/
 instaladores/
+herramientas/babylon/node_modules/

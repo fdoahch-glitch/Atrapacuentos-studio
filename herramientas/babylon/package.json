@@ -1,0 +1,16 @@
+{
+  "name": "atrapa-babylon-build",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Empaqueta Babylon.js para usarlo sin internet dentro del programa.",
+  "scripts": {
+    "build:etapa1": "esbuild src/etapa1.js --bundle --minify --format=iife --target=chrome120 --outfile=../../web/vendor/babylon-etapa1.js"
+  },
+  "dependencies": {
+    "@babylonjs/core": "8.56.2",
+    "@babylonjs/materials": "8.56.2"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12"
+  }
+}
