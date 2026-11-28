@@ -8,8 +8,8 @@ import {
 import {ShadowOnlyMaterial} from "@babylonjs/materials/shadowOnly";
 
 const D0=1000;                         /* distancia de la cámara al plano de trabajo: ahí 1 unidad = 1 unidad de escena */
-const W=1920,H=1080,UW=1280,UH=720;    /* escena de 1280×720 unidades, dibujada a 1920×1080 */
-const SX=W/UW;
+const UW=1280,UH=720;                  /* la escena mide 1280×720 unidades y se dibuja a la resolución elegida */
+let W=1280,H=720,SX=1;
 
 function texDeCanvas(scene,cv,nombre){
   const t=new DynamicTexture(nombre,{width:cv.width,height:cv.height},scene,true,Texture.TRILINEAR_SAMPLINGMODE);
@@ -48,7 +48,7 @@ function crearNino(scene,sombra){
 }
 
 export async function iniciar(canvas,op){
-  op=op||{};canvas.width=W;canvas.height=H;
+  op=op||{};const alto=op.res===1080?1080:720;W=alto*16/9;H=alto;SX=W/UW;const sin=new Set((op.sin||"").split(",").filter(Boolean));canvas.width=W;canvas.height=H;
   let engine,motor="webgl2";
   if(op.motor==="webgpu"){
     if(!navigator.gpu)throw new Error("WebGPU no está disponible en este navegador");
@@ -64,7 +64,7 @@ export async function iniciar(canvas,op){
 
   /* ---- 2,5D: capas de fondo a distintas profundidades; la velocidad de paralaje sale de pf ---- */
   const capas=[];
-  bgDef.L.forEach((L,i)=>{
+  if(!sin.has("capas"))bgDef.L.forEach((L,i)=>{
     const cv=document.createElement("canvas");cv.width=Math.round(2560*SX);cv.height=Math.round(UH*SX);
     const g=cv.getContext("2d");A.dibujarFondo(g,{id:bgDef.id+"_E1_"+i,L:[L]},SX,SX,1,SX,{x:0,y:0},undefined,2560);
     const pf=Math.max(L.pf,.012),esc=1/pf,z=D0*esc-D0;                  /* más lejos cuanto menor es pf */
@@ -75,13 +75,13 @@ export async function iniciar(canvas,op){
   /* ---- 2D: decoración dibujada por el programa, como planos con transparencia ---- */
   const deco=[];
   const quiero=[["arbol",-470,0,1.1,"mecer"],["arbusto",-250,-30,1,"mecer"],["flores",150,-40,1,"mecer"],["arbusto",420,-20,1.2,"mecer"],["arbol",520,10,1,"mecer"],["pasto",-60,-45,1,"mecer"]];
-  for(const [id,x,z,s,mov] of quiero){
+  for(const [id,x,z,s,mov] of (sin.has("deco")?[]:quiero)){
     const sp=A.SP.find(q=>q.id===id);if(!sp)continue;const sp1=A.sprite(sp,2),
       nodo=new TransformNode("deco_"+id,scene);nodo.position.set(x,-290+(id==="arbol"?0:-10),z);
     const pl=MeshBuilder.CreatePlane("decoP_"+id,{width:sp1.wU*s,height:sp1.hU*s},scene);pl.parent=nodo;pl.position.set((sp1.wU/2-sp1.ax)*s,(sp1.ay-sp1.hU/2)*s,0);
     pl.material=matPlano(scene,texDeCanvas(scene,sp1.cv,"decoT_"+id),"decoM_"+id);pl.isPickable=false;deco.push({nodo,mov,ph:Math.random()*6.28,x});
   }
-  for(const [x,y,s] of [[-300,230,1.6],[330,270,1.2],[-540,300,.9]]){
+  for(const [x,y,s] of (sin.has("deco")?[]:[[-300,230,1.6],[330,270,1.2],[-540,300,.9]])){
     const sp=A.SP.find(q=>q.id==="nube"),sp1=A.sprite(sp,2),nodo=new TransformNode("nube",scene);nodo.position.set(x,y,200);
     const pl=MeshBuilder.CreatePlane("nubeP",{width:sp1.wU*s,height:sp1.hU*s},scene);pl.parent=nodo;pl.material=matPlano(scene,texDeCanvas(scene,sp1.cv,"nubeT"),"nubeM");deco.push({nodo,mov:"flotar",ph:x,x});
   }
@@ -89,9 +89,9 @@ export async function iniciar(canvas,op){
   /* ---- luces y sombra ---- */
   const amb=new HemisphericLight("amb",new Vector3(0,1,-.3),scene);amb.intensity=.75;amb.groundColor=new Color3(.55,.6,.5);
   const sol=new DirectionalLight("sol",new Vector3(-.55,-1,.45),scene);sol.position=new Vector3(500,700,-500);sol.intensity=.9;sol.diffuse=new Color3(1,.96,.85);
-  const sg=new ShadowGenerator(2048,sol);sg.usePercentageCloserFiltering=true;sg.filteringQuality=ShadowGenerator.QUALITY_HIGH;sg.bias=.5;sg.normalBias=.5;sg.darkness=.25;
+  const sg=sin.has("sombra")?{addShadowCaster(){},getShadowMap(){return {refreshRate:0};}}:new ShadowGenerator(2048,sol);if(!sin.has("sombra")){sg.usePercentageCloserFiltering=true;sg.filteringQuality=ShadowGenerator.QUALITY_HIGH;sg.bias=.5;sg.normalBias=.5;sg.darkness=.25;}
   const suelo=MeshBuilder.CreateGround("suelo",{width:2600,height:1400},scene);suelo.position.set(0,-290,-250);
-  const sm=new ShadowOnlyMaterial("sombraM",scene);sm.activeLight=sol;sm.alpha=.5;suelo.material=sm;suelo.receiveShadows=true;suelo.isPickable=false;
+  if(!sin.has("sombra")){const sm=new ShadowOnlyMaterial("sombraM",scene);sm.activeLight=sol;sm.alpha=.5;suelo.material=sm;suelo.receiveShadows=true;}else suelo.setEnabled(false);suelo.isPickable=false;
   const nino=crearNino(scene,sg);nino.raiz.position.set(-300,-290,-70);nino.raiz.scaling.setAll(1);
 
   /* ---- partículas en GPU: luciérnagas ---- */
@@ -106,20 +106,20 @@ export async function iniciar(canvas,op){
   particulas.color1=new Color4(1,.95,.5,1);particulas.color2=new Color4(.8,1,.6,1);particulas.colorDead=new Color4(1,.9,.4,0);
   particulas.minSize=10;particulas.maxSize=26;particulas.minLifeTime=3;particulas.maxLifeTime=7;particulas.emitRate=110;particulas.blendMode=ParticleSystem.BLENDMODE_ADD;
   particulas.gravity=new Vector3(0,3,0);particulas.direction1=new Vector3(-12,8,-6);particulas.direction2=new Vector3(12,24,6);particulas.minEmitPower=3;particulas.maxEmitPower=10;particulas.updateSpeed=.02;
-  particulas.preWarmCycles=120;particulas.preWarmStepOffset=1;particulas.start();
+  particulas.preWarmCycles=120;particulas.preWarmStepOffset=1;if(!sin.has("part"))particulas.start();
 
   /* ---- postproceso en GPU ---- */
-  const pipe=new DefaultRenderingPipeline("pipe",true,scene,[cam]);
+  let ip=null;const pipe=sin.has("pipe")?null:new DefaultRenderingPipeline("pipe",true,scene,[cam]);if(pipe){
   pipe.samples=4;pipe.fxaaEnabled=false;pipe.bloomEnabled=true;pipe.bloomThreshold=.8;pipe.bloomWeight=.32;pipe.bloomKernel=64;pipe.bloomScale=.5;
-  pipe.imageProcessingEnabled=true;const ip=pipe.imageProcessing;ip.toneMappingEnabled=true;ip.toneMappingType=ImageProcessingConfiguration.TONEMAPPING_ACES;ip.exposure=1.05;ip.contrast=1.12;
+  pipe.imageProcessingEnabled=true;ip=pipe.imageProcessing;ip.toneMappingEnabled=true;ip.toneMappingType=ImageProcessingConfiguration.TONEMAPPING_ACES;ip.exposure=1.05;ip.contrast=1.12;
   ip.vignetteEnabled=true;ip.vignetteWeight=2.2;ip.vignetteStretch=.4;ip.vignetteColor=new Color4(.05,.05,.1,0);
   pipe.grainEnabled=true;pipe.grain.intensity=5;pipe.grain.animated=true;
   pipe.depthOfFieldEnabled=true;pipe.depthOfFieldBlurLevel=DepthOfFieldEffectBlurLevel.Medium;
-  const dof=pipe.depthOfField;dof.focalLength=50;dof.fStop=1.8;dof.focusDistance=(D0+70)*1000;dof.lensSize=50;
+  var dof=pipe.depthOfField;dof.focalLength=50;dof.fStop=1.8;dof.focusDistance=(D0+70)*1000;dof.lensSize=50;}
   const ef={bloom:true,dof:true,vineta:true,grano:true,msaa:true,sombra:true,particulas:true,tono:true};
   function aplicar(){
-    pipe.bloomEnabled=ef.bloom;pipe.depthOfFieldEnabled=ef.dof;ip.vignetteEnabled=ef.vineta;pipe.grainEnabled=ef.grano;pipe.samples=ef.msaa?4:1;
-    sg.getShadowMap().refreshRate=ef.sombra?1:0;suelo.setEnabled(ef.sombra);ip.toneMappingEnabled=ef.tono;
+    if(pipe){pipe.bloomEnabled=ef.bloom;pipe.depthOfFieldEnabled=ef.dof;ip.vignetteEnabled=ef.vineta;pipe.grainEnabled=ef.grano;pipe.samples=ef.msaa?4:1;ip.toneMappingEnabled=ef.tono;}
+    sg.getShadowMap().refreshRate=ef.sombra?1:0;suelo.setEnabled(ef.sombra);
     if(ef.particulas){if(!particulas.isStarted())particulas.start();}else particulas.stop();
   }
 

@@ -16,8 +16,9 @@ h2{color:#ffb347;font-size:15px;margin:18px 0 6px}video{max-width:100%;border-ra
 <h1>🧪 Etapa 1 · Escena híbrida con Babylon.js</h1>
 <p class="s">Fondo 2,5D con paralaje (capas de tu programa) + decoración 2D + un personaje 3D, con luz, sombra, bloom, desenfoque de profundidad y partículas en GPU. Es solo una prueba: no toca tu programa.</p>
 <div class="bar">
- <select id="motor"><option value="webgpu">Motor: WebGPU</option><option value="webgl2">Motor: WebGL2</option></select>
- <button id="reiniciar">Cambiar motor</button>
+ <select id="motor"><option value="webgl2">Motor: WebGL2 (seguro)</option><option value="webgpu">Motor: WebGPU (experimental)</option></select>
+ <select id="res"><option value="720">720p (liviano)</option><option value="1080">1080p</option></select>
+ <button id="reiniciar">Aplicar motor y resolución</button>
  <button id="pausa">⏸ Pausar</button>
  <button id="medir" class="pri">⏱ Medir sin tope</button>
  <button id="exp" class="pri">🎞 Exportar 5 s a MP4</button>
@@ -35,13 +36,15 @@ h2{color:#ffb347;font-size:15px;margin:18px 0 6px}video{max-width:100%;border-ra
 "use strict";
 const $=id=>document.getElementById(id),L=[],out=$("out");
 const log=s=>{L.push(s);out.textContent=L.join("\n");};
-const q=new URLSearchParams(location.search);let motor=q.get("motor")||"webgpu";$("motor").value=motor;
+const q=new URLSearchParams(location.search);let motor=q.get("motor")||"webgl2";$("motor").value=motor;const RES=+(q.get("res")||720);$("res").value=RES;
 let E=null,pausado=false,rafId=0,t0=performance.now(),tPausa=0,frames=0,tFps=performance.now(),fps=0;
 const nombres={bloom:"Bloom",dof:"Desenfoque de profundidad",vineta:"Viñeta",grano:"Grano",msaa:"Suavizado 4x",sombra:"Sombra suave",particulas:"Luciérnagas (GPU)",tono:"Tono cine"};
+/* IMPORTANTE: en WebGPU cada cuadro debe cerrarse con endFrame(); si no, los comandos se acumulan en memoria */
+function dibujar(t){E.engine.beginFrame();E.poner(t);E.scene.render();E.engine.endFrame();}
 async function arrancar(){
   $("hud").textContent="iniciando "+motor+"…";
-  try{E=await Etapa1.iniciar($("cv"),{motor,fondo:"pradera",apagar:q.get("min")==="1"});}
-  catch(e){log("✖ No pude iniciar "+motor+": "+e.message);if(motor==="webgpu"){motor="webgl2";$("motor").value=motor;log("→ Pruebo con WebGL2…");E=await Etapa1.iniciar($("cv"),{motor});}else return;}
+  try{E=await Etapa1.iniciar($("cv"),{motor,res:RES,fondo:"pradera",apagar:q.get("min")==="1",sin:q.get("sin")||""});}
+  catch(e){log("✖ No pude iniciar "+motor+": "+e.message);if(motor==="webgpu"){motor="webgl2";$("motor").value=motor;log("→ Pruebo con WebGL2…");E=await Etapa1.iniciar($("cv"),{motor,res:RES});}else return;}
   log("Motor en uso: "+E.motor+" · partículas: "+E.tipoPart+" · "+E.W+"×"+E.H);
   const ef=$("efs");ef.innerHTML="";
   for(const k of Object.keys(nombres)){const l=document.createElement("label"),c=document.createElement("input");c.type="checkbox";c.checked=E.ef[k];c.onchange=()=>{E.ef[k]=c.checked;E.aplicar();};l.append(c," "+nombres[k]);ef.appendChild(l);}
@@ -50,11 +53,13 @@ async function arrancar(){
 function bucle(){
   rafId=requestAnimationFrame(bucle);
   if(pausado||!E)return;
-  const t=(performance.now()-t0)/1000;E.poner(t);E.scene.render();
+  dibujar((performance.now()-t0)/1000);
   frames++;const a=performance.now();if(a-tFps>500){fps=frames*1000/(a-tFps);frames=0;tFps=a;$("hud").textContent=E.motor.toUpperCase()+" · "+fps.toFixed(0)+" cuadros/s";}
 }
+/* freno de seguridad: si la memoria de la página sube demasiado, se detiene sola */
+setInterval(()=>{const m=performance.memory;if(!m||pausado||!E)return;const mb=m.usedJSHeapSize/1048576;if(mb>1200){pausado=true;log("⛔ Pausé la escena por seguridad: la memoria de la página llegó a "+mb.toFixed(0)+" MB. Cierra la pestaña y cuéntame.");}},1000);
 $("pausa").onclick=()=>{pausado=!pausado;$("pausa").textContent=pausado?"▶ Seguir":"⏸ Pausar";if(!pausado)t0=performance.now();};
-$("reiniciar").onclick=()=>{location.search="?motor="+$("motor").value;};
+$("reiniciar").onclick=()=>{location.search="?motor="+$("motor").value+"&res="+$("res").value;};
 async function gpuListo(){const d=E.engine._device;if(d&&d.queue)await d.queue.onSubmittedWorkDone();else{const gl=E.engine._gl;if(gl){gl.finish();gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array(4));}}}
 $("medir").onclick=async()=>{
   $("medir").disabled=true;pausado=true;
@@ -62,17 +67,17 @@ $("medir").onclick=async()=>{
   const base={...E.ef};
   for(const [n,ov] of casos){
     Object.assign(E.ef,base,ov);E.aplicar();await new Promise(r=>setTimeout(r,200));
-    for(let i=0;i<20;i++){E.poner(i/30);E.scene.render();}await gpuListo();
-    const N=240,a=performance.now();for(let i=0;i<N;i++){E.poner(i/30);E.scene.render();if(i%30===29)await gpuListo();}await gpuListo();
+    for(let i=0;i<20;i++){dibujar(i/30);}await gpuListo();
+    const N=240,a=performance.now();for(let i=0;i<N;i++){dibujar(i/30);if(i%30===29)await gpuListo();}await gpuListo();
     const dt=(performance.now()-a)/N;log("Medición · "+n+": "+(1000/dt).toFixed(0)+" cuadros/s ("+dt.toFixed(2)+" ms por cuadro)");
   }
   Object.assign(E.ef,base);E.aplicar();pausado=false;t0=performance.now();$("medir").disabled=false;
 };
 $("exp").onclick=async()=>{
   if(typeof VideoEncoder==="undefined"||typeof Mp4Muxer==="undefined"){log("✖ Este navegador no puede crear MP4.");return;}
-  $("exp").disabled=true;pausado=true;const fpsV=30,seg=5,total=fpsV*seg,Wv=1920,Hv=1080;
+  $("exp").disabled=true;pausado=true;const fpsV=30,seg=5,total=fpsV*seg,Wv=E.W,Hv=E.H;
   let cfg=null,gpu=false;
-  for(const hw of ["prefer-hardware","prefer-software"]){const c={codec:"avc1.640028",width:Wv,height:Hv,bitrate:14e6,framerate:fpsV,avc:{format:"avc"},hardwareAcceleration:hw};try{const r=await VideoEncoder.isConfigSupported(c);if(r.supported){cfg=c;gpu=hw==="prefer-hardware";break;}}catch(e){}}
+  for(const hw of ["prefer-hardware","prefer-software"]){const c={codec:"avc1.640028",width:Wv,height:Hv,bitrate:Hv>=1080?14e6:8e6,framerate:fpsV,avc:{format:"avc"},hardwareAcceleration:hw};try{const r=await VideoEncoder.isConfigSupported(c);if(r.supported){cfg=c;gpu=hw==="prefer-hardware";break;}}catch(e){}}
   if(!cfg){log("✖ No hay codificador H.264.");$("exp").disabled=false;pausado=false;return;}
   const mux=new Mp4Muxer.Muxer({target:new Mp4Muxer.ArrayBufferTarget(),video:{codec:"avc",width:Wv,height:Hv},fastStart:"in-memory"});
   let err=null;const enc=new VideoEncoder({output:(c,m)=>mux.addVideoChunk(c,m),error:e=>{err=e;}});enc.configure(cfg);
@@ -80,7 +85,7 @@ $("exp").onclick=async()=>{
   const a=performance.now();let modo="VideoFrame directo del lienzo",tmp=null,tg=null;
   for(let i=0;i<total&&!err;i++){
     await new Promise(r=>requestAnimationFrame(r));
-    E.poner(i/fpsV);E.scene.render();
+    dibujar(i/fpsV);
     let f;try{if(modo.startsWith("VideoFrame"))f=new VideoFrame($("cv"),{timestamp:Math.round(i*1e6/fpsV),duration:Math.round(1e6/fpsV)});}catch(e){modo="copia por Canvas 2D";}
     if(!f){if(!tmp){tmp=document.createElement("canvas");tmp.width=Wv;tmp.height=Hv;tg=tmp.getContext("2d");}tg.drawImage($("cv"),0,0);f=new VideoFrame(tmp,{timestamp:Math.round(i*1e6/fpsV),duration:Math.round(1e6/fpsV)});}
     while(enc.encodeQueueSize>6)await new Promise(r=>setTimeout(r,2));
