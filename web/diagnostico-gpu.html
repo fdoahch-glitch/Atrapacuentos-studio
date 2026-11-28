@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Diagnóstico de GPU · Atrapacuentos Studio</title>
+<style>
+body{margin:0;background:#12141c;color:#e9ebf5;font:14px system-ui,Segoe UI,sans-serif;padding:20px;max-width:900px;margin:auto}
+h1{color:#ffb347;font-size:22px;margin:0 0 4px}h2{color:#ffb347;font-size:15px;margin:22px 0 6px}
+p.s{opacity:.7;margin:0 0 14px}
+button{background:#7a5cff;color:#fff;border:0;border-radius:10px;padding:11px 18px;font:inherit;font-weight:700;cursor:pointer}
+button:disabled{opacity:.5}button.s{background:#2a2f45;margin-left:8px}
+pre{background:#1b1e2c;border:1px solid #343a58;border-radius:10px;padding:12px;white-space:pre-wrap;word-break:break-word;margin:0}
+table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #2a2f45;padding:6px 8px;text-align:left}
+.ok{color:#5be08a}.no{color:#ff7a7a}
+</style></head><body>
+<h1>🩺 Diagnóstico de GPU</h1>
+<p class="s">Mide tu tarjeta de video con Canvas 2D, WebGL2 y WebGPU. Ábrelo en Edge o Chrome, pulsa el botón y espera unos 30 segundos. No toca ningún dato tuyo ni sale de tu PC.</p>
+<button id="go">▶ Empezar diagnóstico</button><button id="cp" class="s" disabled>📋 Copiar informe</button>
+<h2>Resultado</h2><pre id="out">Pulsa «Empezar diagnóstico».</pre>
+<h2>Cuadros por segundo (1920×1080, 400 elementos con transparencia y giro)</h2>
+<table id="tb"><tr><th>Motor</th><th>cuadros/s</th><th>ms por cuadro</th><th>leer un cuadro de vuelta (ms)</th></tr></table>
+<canvas id="c2" width="1920" height="1080" style="display:none"></canvas>
+<canvas id="cg" width="1920" height="1080" style="display:none"></canvas>
+<canvas id="cw" width="1920" height="1080" style="display:none"></canvas>
+<script>
+"use strict";
+const $=id=>document.getElementById(id),out=$("out"),N=400,W=1920,H=1080,DUR=3000;
+const L=[];const log=(s)=>{L.push(s);out.textContent=L.join("\n");};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const frames=()=>new Promise(r=>requestAnimationFrame(r));
+const row=(n,fps,ms,rb)=>{const t=document.createElement("tr");t.innerHTML=`<td>${n}</td><td>${fps}</td><td>${ms}</td><td>${rb}</td>`;$("tb").appendChild(t);L.push(`${n}: ${fps} cuadros/s · ${ms} ms/cuadro · lectura ${rb} ms`);};
+/* elemento de prueba: bola con degradado y borde transparente */
+function sprite(){const c=document.createElement("canvas");c.width=c.height=256;const g=c.getContext("2d"),r=g.createRadialGradient(128,128,10,128,128,120);r.addColorStop(0,"#ffe066");r.addColorStop(.7,"#4fae64");r.addColorStop(1,"rgba(79,174,100,0)");g.fillStyle=r;g.fillRect(0,0,256,256);g.fillStyle="#fff";g.fillRect(100,100,56,56);return c;}
+const SP=sprite();
+const items=Array.from({length:N},(_,i)=>({x:Math.random()*W,y:Math.random()*H,s:60+Math.random()*140,a:Math.random()*6.28,v:(Math.random()-.5)*2}));
+async function medir(fn,leer){
+  let n=0,t0=performance.now(),t=t0;
+  while(t-t0<DUR){fn(n/60);await frames();n++;t=performance.now();}
+  const fps=n/((t-t0)/1000);let rb="—";
+  if(leer){try{const a=performance.now();for(let i=0;i<5;i++)await leer();rb=((performance.now()-a)/5).toFixed(1);}catch(e){rb="falló: "+e.message.slice(0,40);}}
+  return {fps:fps.toFixed(1),ms:(1000/fps).toFixed(2),rb};
+}
+/* ---------- Canvas 2D ---------- */
+async function t2d(){
+  const g=$("c2").getContext("2d",{willReadFrequently:false});
+  const r=await medir(t=>{g.clearRect(0,0,W,H);g.fillStyle="#8fc8f0";g.fillRect(0,0,W,H);for(const o of items){g.save();g.translate(o.x,o.y);g.rotate(o.a+t*o.v);g.drawImage(SP,-o.s/2,-o.s/2,o.s,o.s);g.restore();}},
+    async()=>{const q=document.createElement("canvas");q.width=W;q.height=H;const x=q.getContext("2d",{willReadFrequently:true});x.drawImage($("c2"),0,0);x.getImageData(0,0,W,H);});
+  row("Canvas 2D (el que usas hoy)",r.fps,r.ms,r.rb);
+}
+/* ---------- WebGL2 ---------- */
+async function tgl(){
+  const cv=$("cg"),gl=cv.getContext("webgl2",{antialias:true,alpha:false,premultipliedAlpha:true,preserveDrawingBuffer:true});
+  if(!gl){row("WebGL2","no disponible","—","—");return;}
+  const sh=(t,s)=>{const x=gl.createShader(t);gl.shaderSource(x,s);gl.compileShader(x);if(!gl.getShaderParameter(x,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(x));return x;};
+  const p=gl.createProgram();
+  gl.attachShader(p,sh(gl.VERTEX_SHADER,`#version 300 es
+in vec2 q;in vec4 d;out vec2 u;uniform vec2 R;uniform float T;
+void main(){float a=d.w+T*d.z*0.01;vec2 c=vec2(cos(a),sin(a));vec2 w=vec2(q.x*c.x-q.y*c.y,q.x*c.y+q.y*c.x)*d.z;
+vec2 pos=d.xy+w;u=q+.5;gl_Position=vec4(pos/R*2.-1.,0.,1.);gl_Position.y*=-1.;}`));
+  gl.attachShader(p,sh(gl.FRAGMENT_SHADER,`#version 300 es
+precision mediump float;in vec2 u;out vec4 o;uniform sampler2D S;void main(){o=texture(S,u);}`));
+  gl.linkProgram(p);gl.useProgram(p);
+  const tx=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tx);gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,SP);gl.generateMipmap(gl.TEXTURE_2D);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  const bq=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,bq);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-.5,-.5,.5,-.5,-.5,.5,.5,.5]),gl.STATIC_DRAW);
+  const lq=gl.getAttribLocation(p,"q");gl.enableVertexAttribArray(lq);gl.vertexAttribPointer(lq,2,gl.FLOAT,false,0,0);
+  const D=new Float32Array(N*4);items.forEach((o,i)=>{D[i*4]=o.x;D[i*4+1]=o.y;D[i*4+2]=o.s;D[i*4+3]=o.a;});
+  const bd=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,bd);gl.bufferData(gl.ARRAY_BUFFER,D,gl.STATIC_DRAW);
+  const ld=gl.getAttribLocation(p,"d");gl.enableVertexAttribArray(ld);gl.vertexAttribPointer(ld,4,gl.FLOAT,false,0,0);gl.vertexAttribDivisor(ld,1);
+  gl.uniform2f(gl.getUniformLocation(p,"R"),W,H);const uT=gl.getUniformLocation(p,"T");
+  gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);gl.viewport(0,0,W,H);
+  const r=await medir(t=>{gl.uniform1f(uT,t);gl.clearColor(.56,.78,.94,1);gl.clear(gl.COLOR_BUFFER_BIT);gl.drawArraysInstanced(gl.TRIANGLE_STRIP,0,4,N);},
+    async()=>{const b=new Uint8Array(W*H*4);gl.readPixels(0,0,W,H,gl.RGBA,gl.UNSIGNED_BYTE,b);});
+  row("WebGL2 (instanciado, 1 llamada)",r.fps,r.ms,r.rb);
+}
+/* ---------- WebGPU ---------- */
+async function tgpu(info){
+  if(!navigator.gpu){row("WebGPU","no disponible","—","—");return;}
+  const ad=await navigator.gpu.requestAdapter({powerPreference:"high-performance"});if(!ad){row("WebGPU","sin adaptador","—","—");return;}
+  const dev=await ad.requestDevice(),cv=$("cw"),ctx=cv.getContext("webgpu"),fmt=navigator.gpu.getPreferredCanvasFormat();
+  ctx.configure({device:dev,format:fmt,alphaMode:"opaque",usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC});
+  const bm=await createImageBitmap(SP,{premultiplyAlpha:"premultiply"}),mips=Math.floor(Math.log2(256))+1;
+  const tex=dev.createTexture({size:[256,256],format:"rgba8unorm",mipLevelCount:mips,usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST|GPUTextureUsage.RENDER_ATTACHMENT});
+  dev.queue.copyExternalImageToTexture({source:bm},{texture:tex},[256,256]);
+  /* mipmaps por cómputo simple: se reduce con un pase de render por nivel */
+  const mm=dev.createShaderModule({code:`@group(0)@binding(0)var s:sampler;@group(0)@binding(1)var t:texture_2d<f32>;
+struct V{@builtin(position)p:vec4f,@location(0)u:vec2f};
+@vertex fn v(@builtin(vertex_index)i:u32)->V{var q=array<vec2f,4>(vec2f(-1,-1),vec2f(1,-1),vec2f(-1,1),vec2f(1,1));var o:V;o.p=vec4f(q[i],0,1);o.u=q[i]*vec2f(.5,-.5)+.5;return o;}
+@fragment fn f(i:V)->@location(0)vec4f{return textureSample(t,s,i.u);}`});
+  const mp=dev.createRenderPipeline({layout:"auto",vertex:{module:mm,entryPoint:"v"},fragment:{module:mm,entryPoint:"f",targets:[{format:"rgba8unorm"}]},primitive:{topology:"triangle-strip"}});
+  const ms=dev.createSampler({minFilter:"linear"});{const e=dev.createCommandEncoder();
+    for(let l=1;l<mips;l++){const bg=dev.createBindGroup({layout:mp.getBindGroupLayout(0),entries:[{binding:0,resource:ms},{binding:1,resource:tex.createView({baseMipLevel:l-1,mipLevelCount:1})}]});
+      const pa=e.beginRenderPass({colorAttachments:[{view:tex.createView({baseMipLevel:l,mipLevelCount:1}),loadOp:"clear",storeOp:"store"}]});pa.setPipeline(mp);pa.setBindGroup(0,bg);pa.draw(4);pa.end();}
+    dev.queue.submit([e.finish()]);}
+  const D=new Float32Array(N*4);items.forEach((o,i)=>{D[i*4]=o.x;D[i*4+1]=o.y;D[i*4+2]=o.s;D[i*4+3]=o.a;});
+  const bd=dev.createBuffer({size:D.byteLength,usage:GPUBufferUsage.VERTEX|GPUBufferUsage.COPY_DST});dev.queue.writeBuffer(bd,0,D);
+  const ub=dev.createBuffer({size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+  const m=dev.createShaderModule({code:`struct U{r:vec2f,t:f32,z:f32};@group(0)@binding(0)var<uniform>u:U;@group(0)@binding(1)var s:sampler;@group(0)@binding(2)var t:texture_2d<f32>;
+struct V{@builtin(position)p:vec4f,@location(0)uv:vec2f};
+@vertex fn v(@builtin(vertex_index)i:u32,@location(0)d:vec4f)->V{var q=array<vec2f,4>(vec2f(-.5,-.5),vec2f(.5,-.5),vec2f(-.5,.5),vec2f(.5,.5));
+ let a=d.w+u.t*d.z;let c=vec2f(cos(a),sin(a));let k=q[i];let w=vec2f(k.x*c.x-k.y*c.y,k.x*c.y+k.y*c.x)*d.z;let pos=(d.xy+w)/u.r*2.-1.;
+ var o:V;o.p=vec4f(pos.x,-pos.y,0,1);o.uv=k+.5;return o;}
+@fragment fn f(i:V)->@location(0)vec4f{return textureSample(t,s,i.uv);}`});
+  const pl=dev.createRenderPipeline({layout:"auto",vertex:{module:m,entryPoint:"v",buffers:[{arrayStride:16,stepMode:"instance",attributes:[{shaderLocation:0,offset:0,format:"float32x4"}]}]},
+    fragment:{module:m,entryPoint:"f",targets:[{format:fmt,blend:{color:{srcFactor:"one",dstFactor:"one-minus-src-alpha"},alpha:{srcFactor:"one",dstFactor:"one-minus-src-alpha"}}}]},primitive:{topology:"triangle-strip"},multisample:{count:4}});
+  const sm=dev.createSampler({magFilter:"linear",minFilter:"linear",mipmapFilter:"linear"});
+  const bg=dev.createBindGroup({layout:pl.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:ub}},{binding:1,resource:sm},{binding:2,resource:tex.createView()}]});
+  const msaa=dev.createTexture({size:[W,H],sampleCount:4,format:fmt,usage:GPUTextureUsage.RENDER_ATTACHMENT});
+  const rb=dev.createBuffer({size:W*4*H,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+  const tgt=dev.createTexture({size:[W,H],format:fmt,usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC});
+  const draw=(t,dest)=>{dev.queue.writeBuffer(ub,0,new Float32Array([W,H,t,0]));const e=dev.createCommandEncoder();
+    const pa=e.beginRenderPass({colorAttachments:[{view:msaa.createView(),resolveTarget:(dest||ctx.getCurrentTexture()).createView(),clearValue:{r:.56,g:.78,b:.94,a:1},loadOp:"clear",storeOp:"discard"}]});
+    pa.setPipeline(pl);pa.setBindGroup(0,bg);pa.setVertexBuffer(0,bd);pa.draw(4,N);pa.end();if(dest)e.copyTextureToBuffer({texture:dest},{buffer:rb,bytesPerRow:W*4},[W,H]);dev.queue.submit([e.finish()]);};
+  const r=await medir(draw,async()=>{draw(0,tgt);await rb.mapAsync(GPUMapMode.READ);rb.unmap();});
+  row("WebGPU (instanciado, MSAA 4x)",r.fps,r.ms,r.rb);
+}
+/* ---------- datos del equipo ---------- */
+async function info(){
+  log("Navegador: "+navigator.userAgent);
+  log("Pantalla: "+screen.width+"×"+screen.height+" · escala "+devicePixelRatio);
+  const g=document.createElement("canvas").getContext("webgl2");
+  if(g){const e=g.getExtension("WEBGL_debug_renderer_info");
+    log("WebGL2: "+(e?g.getParameter(e.UNMASKED_RENDERER_WEBGL):g.getParameter(g.RENDERER)));
+    log("  textura máx "+g.getParameter(g.MAX_TEXTURE_SIZE)+" · muestras MSAA máx "+g.getParameter(g.MAX_SAMPLES)+" · color float "+(g.getExtension("EXT_color_buffer_float")?"sí":"no"));}
+  else log("WebGL2: NO disponible");
+  if(navigator.gpu){try{const a=await navigator.gpu.requestAdapter({powerPreference:"high-performance"});
+    if(a){const i=a.info||{};log("WebGPU: disponible · "+[i.vendor,i.architecture,i.device,i.description].filter(Boolean).join(" · "));
+      log("  textura máx "+a.limits.maxTextureDimension2D+" · buffer máx "+(a.limits.maxBufferSize/1048576|0)+" MB · almacenamiento máx "+(a.limits.maxStorageBufferBindingSize/1048576|0)+" MB");
+      log("  funciones: "+[...a.features].slice(0,14).join(", "));}else log("WebGPU: sin adaptador (la tarjeta o el driver no la ofrecen)");}catch(e){log("WebGPU: error "+e.message);}}
+  else log("WebGPU: NO disponible en este navegador");
+  if(typeof VideoEncoder!=="undefined"){
+    for(const [n,w,h,fps] of [["1080p30",1920,1080,30],["1080p60",1920,1080,60],["4K30",3840,2160,30]]){
+      for(const hw of ["prefer-hardware","prefer-software"]){try{const r=await VideoEncoder.isConfigSupported({codec:"avc1.640034",width:w,height:h,bitrate:14e6,framerate:fps,hardwareAcceleration:hw});
+        log("Video H.264 "+n+" ("+(hw==="prefer-hardware"?"GPU":"CPU")+"): "+(r.supported?"sí":"no"));}catch(e){log("Video H.264 "+n+": error");}}}
+  }else log("WebCodecs: no disponible");
+  log("Núcleos CPU: "+navigator.hardwareConcurrency+" · memoria aprox.: "+(navigator.deviceMemory||"?")+" GB");
+}
+$("go").onclick=async()=>{
+  $("go").disabled=true;L.length=0;$("tb").querySelectorAll("tr:not(:first-child)").forEach(r=>r.remove());
+  try{await info();log("");log("Midiendo (unos 3 segundos por motor, no cierres la pestaña)…");
+    for(const [n,f] of [["Canvas 2D",t2d],["WebGL2",tgl],["WebGPU",tgpu]]){try{await f();}catch(e){log("ERROR en "+n+": "+e.message);row(n,"error","—","—");}}}catch(e){log("ERROR: "+e.message);}
+  log("");log("Listo. Pulsa «Copiar informe» y pégalo en el chat.");$("cp").disabled=false;$("go").disabled=false;
+};
+$("cp").onclick=async()=>{try{await navigator.clipboard.writeText(L.join("\n"));$("cp").textContent="✔ Copiado";}catch(e){const r=document.createRange();r.selectNodeContents(out);getSelection().removeAllRanges();getSelection().addRange(r);$("cp").textContent="Selecciona y copia con Ctrl+C";}};
+</script></body></html>
