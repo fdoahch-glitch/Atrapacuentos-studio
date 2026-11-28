@@ -138,7 +138,7 @@ const PASOS=[
  ["Dos modos","<b>Modo Simple</b> muestra solo lo habitual. <b>Modo Avanzado</b> deja a la mano todas las herramientas profesionales. Puedes cambiar cuando quieras desde la barra."]
 ];
 function tutorial(){
-  let i=0;const m=ventana("");const box=Q(".ia-box",m);
+  let i=0;const m=ventana("");m.classList.add("tutorial");const box=Q(".ia-box",m);
   const pinta=()=>{const [t,d]=PASOS[i],ult=i===PASOS.length-1;
     box.innerHTML=`<h2>${t}</h2><p style="font-size:14px;line-height:1.5">${d}</p><div style="display:flex;gap:8px;align-items:center;margin-top:14px"><span style="opacity:.6;font-size:12px">${i+1} de ${PASOS.length}</span><span style="flex:1"></span>${i?'<button id="tAnt">← Atrás</button>':""}${ult?'<button id="tSimple">Empezar en Modo Simple</button><button id="tPri" class="go">🎬 Mi primer vídeo</button><button id="tAv">Modo Avanzado</button>':'<button id="tSig" class="go">Siguiente →</button>'}<button id="tOmitir" title="Cerrar el tutorial">Omitir</button></div>`;
     const f=(id,fn)=>{const b=Q("#"+id,box);if(b)b.onclick=fn;};
