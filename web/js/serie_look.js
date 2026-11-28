@@ -24,9 +24,12 @@ function atmos(g,W,H,t,k,hora){
       if(d>=0&&d<.45){const a=d<.08?d/.08:d<.16?.35:d<.22?.8:Math.max(0,1-(d-.22)/.23);g.fillStyle="rgba(235,240,255,"+(a*.55).toFixed(3)+")";g.fillRect(0,0,W,H);}}
   g.restore();
 }
-function apply(g,sc,t){
+/* la atmósfera (partículas de luz, niebla, viento…) y el aspecto (brillo, luz de foco, color, viñeta, grano) van por separado:
+   el aspecto también existe en la GPU (gpu_aspecto.js) y se usa cuando el motor gráfico está activo */
+function atmosfera(g,sc,t){if(sc.atm)atmos(g,g.canvas.width,g.canvas.height,t,sc.atm);}
+function apply(g,sc,t){atmosfera(g,sc,t);aspecto(g,sc,t);}
+function aspecto(g,sc,t){
   const W=g.canvas.width,H=g.canvas.height,L=sc.look||{};
-  if(sc.atm)atmos(g,W,H,t,sc.atm);
   /* brillo suave: una copia pequeña y borrosa se suma encima */
   if(L.bloom>0){if(!bl)bl=document.createElement("canvas");const bw=Math.max(64,W>>3),bh=Math.max(36,H>>3);if(bl.width!==bw)bl.width=bw;if(bl.height!==bh)bl.height=bh;const b=bl.getContext("2d");
     b.globalCompositeOperation="copy";b.filter="brightness(1.15) contrast(1.15) blur(1.5px)";b.drawImage(g.canvas,0,0,bw,bh);b.filter="none";
@@ -42,5 +45,5 @@ function apply(g,sc,t){
   if(L.grano>0){g.save();g.globalAlpha=Math.min(.35,L.grano*.35);g.globalCompositeOperation="overlay";const n=Math.floor(t*24),sz=Math.max(2,Math.round(W/400));
     for(let i=0;i<500;i++){const x=rnd(i,n)*W,y=rnd(i,n+7)*H;g.fillStyle=rnd(i,n+3)>.5?"#fff":"#000";g.fillRect(x,y,sz,sz);}g.restore();}
 }
-window.Look={ATM,apply};
+window.Look={ATM,apply,atmosfera,aspecto};
 })();

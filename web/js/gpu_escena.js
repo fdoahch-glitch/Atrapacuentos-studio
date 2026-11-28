@@ -54,6 +54,17 @@ function aProxyFondo(sc,cam1,sx,t,orden){
   const q=plano();ubicar(q,p.m,G.W/2,G.H/2,G.W,G.H,0,1,orden);
 }
 
+/* tinte de «atardecer» y «noche»: un degradado que multiplica los colores de todo lo dibujado (igual que en el dibujo clásico) */
+function matHora(h){
+  const key="hora:"+h;let m=mats.get(key);if(m)return m;
+  const cv=document.createElement("canvas");cv.width=4;cv.height=256;const g=cv.getContext("2d"),gr=g.createLinearGradient(0,0,0,256);
+  if(h==="tarde"){gr.addColorStop(0,"#ffb98a");gr.addColorStop(1,"#ffe0b8");}else{gr.addColorStop(0,"#5a6aa8");gr.addColorStop(1,"#7a86bc");}
+  g.fillStyle=gr;g.fillRect(0,0,4,256);
+  const t=new B.DynamicTexture("t_"+key,{width:4,height:256},scene,false,B.Texture.BILINEAR_SAMPLINGMODE);t.getContext().drawImage(cv,0,0);t.wrapU=t.wrapV=B.Texture.CLAMP_ADDRESSMODE;t.update(true);texs.set(key,t);
+  m=new B.StandardMaterial("m_"+key,scene);m.diffuseTexture=t;m.disableLighting=true;m.emissiveColor=B.Color3.White();m.backFaceCulling=false;m.disableDepthWrite=true;
+  m.transparencyMode=B.Material.MATERIAL_ALPHABLEND;m.alphaMode=B.Constants.ALPHA_MULTIPLY;mats.set(key,m);return m;
+}
+
 /* ---------- fondo ---------- */
 function resCapa(){return Math.max(1,Math.min(2,G.W/api.UW()*1.5));}
 function capasDe(bg){
@@ -140,6 +151,19 @@ G.iniciar=async function(motor){
     E.setHardwareScalingLevel(1);
     scene=new B.Scene(E);scene.autoClear=true;scene.clearColor=new B.Color4(0,0,0,0);scene.skipPointerMovePicking=true;scene.autoClearDepthAndStencil=true;
     cam=new B.FreeCamera("cam",new B.Vector3(0,0,-10),scene);cam.mode=B.Camera.ORTHOGRAPHIC_CAMERA;cam.setTarget(new B.Vector3(0,0,0));cam.minZ=1;cam.maxZ=100;
+    if(window.GPUAsp)GPUAsp.iniciar();
+    /* precalentamiento: Babylon compila los shaders en segundo plano; se espera aquí para que el primer cuadro salga completo */
+    G.W=1280;G.H=720;G.canvas=cv;
+    {const c0=document.createElement("canvas");c0.width=c0.height=4;const q1=plano(),q2=plano(),q3=plano();
+      ubicar(q1,matDe("warm",texDeCanvas("warm",c0,true)),2,2,4,4,0,1,0);ubicar(q2,matHora("tarde"),2,2,4,4,0,1,1);
+      const p=proxy();ubicar(q3,p.m,2,2,4,4,0,1,2);
+      /* se renderiza mientras se espera: algunos motores solo avanzan la compilación entre cuadros */
+      const listo=()=>quads.slice(0,3).every(q=>q.isReady(true));
+      for(let i=0;i<150&&!listo();i++){E.beginFrame();scene.render();E.endFrame();await new Promise(r=>setTimeout(r,40));}
+      if(!listo())console.warn("Motor GPU: los shaders tardan en compilar; sigo igual.");
+      E.beginFrame();scene.render();E.endFrame();
+      for(const q of quads)q.setEnabled(false);usados=0;usadosProx=0;}
+    G.W=0;G.H=0;
     G.canvas=cv;G.motor=motor;G.activo=true;G.estado="listo";G.fallo="";G.W=0;G.H=0;
     window.dispatchEvent(new CustomEvent("gpu-listo",{detail:{motor}}));
     return true;
@@ -175,6 +199,7 @@ G.render=function(sc,t,W,H,cam0,cam1,orden,opt){
     let n=dibujarFondo(sc,cam1,sx,t);
     n=100;
     for(const it of orden){if(it.oculto)continue;dibujarItem(sc,it,t,cam0,sx,n++,opt);}
+    if(sc.hora==="tarde"||sc.hora==="noche"){const q=plano();ubicar(q,matHora(sc.hora),W/2,H/2,W,H,0,1,n++);}
     for(let i=usados;i<quads.length;i++)quads[i].setEnabled(false);
     E.beginFrame();scene.render();E.endFrame();
     G.ultimoMs=performance.now()-a0;return true;
@@ -185,6 +210,7 @@ G.render=function(sc,t,W,H,cam0,cam1,orden,opt){
     return false;
   }
 };
+G._dbg=()=>({scene:scene.isReady(),meshes:scene.meshes.map(m=>[m.name,m.isEnabled(),m.isReady(true),m.material&&m.material.isReady(m)]),pend:scene._pendingData&&scene._pendingData.length,texturas:scene.textures.map(t=>[t.name,t.isReady()])});
 G.preferencia=pref;
 G.elegir=async function(v){
   guardar(v);
