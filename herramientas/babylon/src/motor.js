@@ -1,0 +1,17 @@
+/* Babylon.js empaquetado para el compositor GPU del programa (sin internet). Solo se importan las piezas que se usan. */
+import {Engine} from "@babylonjs/core/Engines/engine";
+import {WebGPUEngine} from "@babylonjs/core/Engines/webgpuEngine";
+import "@babylonjs/core/Engines/WebGPU/Extensions/engine.dynamicTexture";
+import "@babylonjs/core/Engines/WebGPU/Extensions/engine.alpha";
+import {Scene} from "@babylonjs/core/scene";
+import {FreeCamera} from "@babylonjs/core/Cameras/freeCamera";
+import {Camera} from "@babylonjs/core/Cameras/camera";
+import {Vector3} from "@babylonjs/core/Maths/math.vector";
+import {Color3,Color4} from "@babylonjs/core/Maths/math.color";
+import {CreatePlane} from "@babylonjs/core/Meshes/Builders/planeBuilder";
+import {StandardMaterial} from "@babylonjs/core/Materials/standardMaterial";
+import {Material} from "@babylonjs/core/Materials/material";
+import {DynamicTexture} from "@babylonjs/core/Materials/Textures/dynamicTexture";
+import {Texture} from "@babylonjs/core/Materials/Textures/texture";
+import {Constants} from "@babylonjs/core/Engines/constants";
+window.BabylonMotor={Engine,WebGPUEngine,Scene,FreeCamera,Camera,Vector3,Color3,Color4,MeshBuilder:{CreatePlane},StandardMaterial,Material,DynamicTexture,Texture,Constants};

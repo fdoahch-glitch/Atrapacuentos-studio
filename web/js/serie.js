@@ -252,12 +252,19 @@ function bgCamAt(sc,cam,t){
   else if(m==="alejar")c.z=cam.z*(1+.14*v*(1-Math.min(1,t/d)));
   return c;
 }
+/* elementos de la escena en orden de dibujo (lo más lejano primero) */
+function ordenDe(sc){return sc.items.map((it,i)=>[it,i]).sort((a,b)=>((a[0].d==null?60:a[0].d)-(b[0].d==null?60:b[0].d))||a[1]-b[1]).map(x=>x[0]);}
+/* puente para el compositor GPU (gpu_escena.js): le presta la matemática del dibujo clásico para que ambos coincidan */
+window.SerieGpuApi={A,SPD,BGS,UW,UH,hash,drawItem,drawBg,pfOf,IMG:()=>IMG,pos:(it,t)=>entSal(it,t,itemPos(it,t))};
 function frame(g,sc,t,opt){
   const W=g.canvas.width,sx=W/UW();g.clearRect(0,0,W,g.canvas.height);
-  const cam=camAt(sc,t);
-  drawBg(g,sc,bgCamAt(sc,cam,t),sx,t);
-  const L=sc.items.map((it,i)=>[it,i]).sort((a,b)=>((a[0].d==null?60:a[0].d)-(b[0].d==null?60:b[0].d))||a[1]-b[1]);
-  for(const [it] of L){if(it.oculto)continue;drawItem(g,sc,it,t,cam,sx,opt);}
+  const cam=camAt(sc,t),cam1=bgCamAt(sc,cam,t),L=ordenDe(sc);
+  let gpu=false;
+  if(window.GPUEsc&&GPUEsc.activo&&g.canvas.id==="cv"&&!(opt&&opt.clasico)){gpu=GPUEsc.render(sc,t,W,g.canvas.height,cam,cam1,L,opt);if(gpu)g.drawImage(GPUEsc.canvas,0,0,W,g.canvas.height);}
+  if(!gpu){
+    drawBg(g,sc,cam1,sx,t);
+    for(const it of L){if(it.oculto)continue;drawItem(g,sc,it,t,cam,sx,opt);}
+  }
   if(sc.hora==="tarde"||sc.hora==="noche"){g.save();g.globalCompositeOperation="multiply";const gr=g.createLinearGradient(0,0,0,g.canvas.height);
     if(sc.hora==="tarde"){gr.addColorStop(0,"#ffb98a");gr.addColorStop(1,"#ffe0b8");}else{gr.addColorStop(0,"#5a6aa8");gr.addColorStop(1,"#7a86bc");}
     g.fillStyle=gr;g.fillRect(0,0,W,g.canvas.height);g.restore();}
@@ -684,7 +691,7 @@ async function importText(txt){
 function setProj(p){
   migrar(p);p.imgs=p.imgs||{};p.actores=p.actores||[];p.mundo=clamp(p.mundo||0,0,p.mundos.length-1);
   for(const sc of p.mundos){sc.items=sc.items||[];sc.lineas=sc.lineas||[];sc.cam=sc.cam||{z0:1,z1:1,x0:0,x1:0};sc.dur=sc.dur||10;sc.nombre=sc.nombre||"Escena";}
-  if(!p.tipo)p.tipo="serie";p.lienzo=lienzoDe(p);proj=p;Studio.proj=p;IMG={};aplicarLienzo();sel=null;edT=0;undo=[];redo=[];lastSnap=snapshot();loadImgs();$("pNombre").value=p.nombre||"";fullRender();
+  if(!p.tipo)p.tipo="serie";p.lienzo=lienzoDe(p);if(window.GPUEsc&&GPUEsc.limpiar)GPUEsc.limpiar();proj=p;Studio.proj=p;IMG={};aplicarLienzo();sel=null;edT=0;undo=[];redo=[];lastSnap=snapshot();loadImgs();$("pNombre").value=p.nombre||"";fullRender();
 }
 function idb(){return new Promise((ok,no)=>{const r=indexedDB.open("atr_serie",1);r.onupgradeneeded=()=>r.result.createObjectStore("p");r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error);});}
 async function saveAuto(){if(window.__RENDER)return;try{const db=await idb(),tx=db.transaction("p","readwrite");tx.objectStore("p").put(JSON.stringify(proj,strip),"actual");$("info").textContent="✔ Guardado en este equipo";}catch(e){$("info").textContent="";}}
