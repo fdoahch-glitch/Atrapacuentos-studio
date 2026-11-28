@@ -32,7 +32,7 @@ function card(o,id){
   const pr=(window.Studio&&Studio.proj.imgs[id])||{},tiene=!!pr.depth,r=o.rel;
   const op=(v,l,a)=>`<option value="${v}" ${a===v?"selected":""}>${l}</option>`;
   let h=`<div class="card"><h4>🏔 Relieve con IA</h4><div class="sub" style="font-size:11px;opacity:.7;margin-bottom:4px">La IA separa lo cercano de lo lejano y la imagen gana profundidad cuando se mueve.</div>`;
-  if(!tiene)h+=`<div class="btns"><button id="rlCalc">✨ Calcular relieve</button></div>${nat()?"":`<div class="sub" style="font-size:11px;opacity:.7">Disponible en el programa de escritorio.</div>`}`;
+  if(!tiene)h+=`${nat()?`<div class="sub" style="font-size:12px;opacity:.9;background:#12142a;border-radius:8px;padding:7px 9px;margin:4px 0">⬇ <b>Se descarga una sola vez</b>: la primera vez que pulses «Calcular relieve» el programa baja el modelo de IA (unos 100 MB, necesita internet). Después queda guardado y funciona sin internet.</div>`:""}<div class="btns"><button id="rlCalc">✨ Calcular relieve</button></div>${nat()?"":`<div class="sub" style="font-size:11px;opacity:.7">Disponible en el programa de escritorio.</div>`}`;
   else{
     h+=`<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="rlOn" ${r?"checked":""}> Usar relieve</label>`;
     if(r)h+=`<div class="row" style="margin-top:6px"><span>Fuerza</span><input id="rlF" type="range" min="5" max="100" value="${r.fuerza==null?50:r.fuerza}"></div>
