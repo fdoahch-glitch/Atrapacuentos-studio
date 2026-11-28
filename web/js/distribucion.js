@@ -51,7 +51,7 @@ async function actualizaciones(){
   if(r.web)est.textContent="Estás usando la versión web: se actualiza sola al recargar la página.";
   else if(r.error)est.textContent="No pude consultar GitHub (¿sin internet?). Detalle: "+r.error;
   else if(!r.nov)est.textContent="✅ Tienes la última versión.";
-  else{est.innerHTML=`Hay una versión nueva: <b>${esc(r.nov.version)}</b> <button id="actVer2" class="go">Ver</button>`;Q("#actVer2",m).onclick=()=>{m.remove();dialogoAct(r.nov);};}
+  else{botonNueva(r.nov);est.innerHTML=`Hay una versión nueva: <b>${esc(r.nov.version)}</b> <button id="actVer2" class="go">Ver</button>`;Q("#actVer2",m).onclick=()=>{m.remove();dialogoAct(r.nov);};}
 }
 /* ---------- diagnóstico del equipo ---------- */
 async function medirCanvas(){
@@ -158,11 +158,27 @@ async function reporte(){
 }
 window.Distrib={actualizaciones,diagnostico,reporte,errores:()=>ERR.slice(),version:()=>VER,_recomendar:recomendar,_texto:textoDiag,_buscar:buscar,_aviso:aviso};
 /* ---------- arranque ---------- */
+/* Botón fijo «⬆ vX» en la barra superior: aparece apenas hay una versión publicada más nueva que la instalada y NO se puede descartar
+   (el aviso de abajo sí). Se revisa al abrir el programa y cada 30 minutos mientras está abierto. */
+let botonVer=null;
+function botonNueva(nov){
+  if(!nov){if(botonVer)botonVer.hidden=true;return;}
+  if(!botonVer){botonVer=document.createElement("button");botonVer.id="bNuevaVer";botonVer.className="go";
+    const ref=$("bProj")||$("bPlayAll")||$("bPlay");if(!ref||!ref.parentNode)return;ref.parentNode.insertBefore(botonVer,ref);}
+  botonVer.hidden=false;botonVer.textContent="⬆ v"+nov.version;botonVer.title="Hay una versión nueva ("+nov.version+"). Pulsa para ver qué cambió y actualizar.";
+  botonVer.onclick=()=>dialogoAct(nov);
+}
+async function revisar(conAviso){
+  const r=await buscar();
+  if(r.nov){botonNueva(r.nov);if(conAviso&&lee("atr_upd_omitir","")!==r.nov.version&&!$("actBanner"))aviso(r.nov);}
+  else if(!r.error)botonNueva(null);
+  return r;
+}
 (async()=>{
   if(inv){try{VER=await inv("version_app");}catch(e){}}
   if(!inv||lee("atr_upd_auto","1")==="0")return;
-  const hoy=Date.now(),ult=+lee("atr_upd_ult","0");if(hoy-ult<20*3600*1000)return;
-  setTimeout(async()=>{guarda("atr_upd_ult",String(Date.now()));const r=await buscar();
-    if(r.nov&&lee("atr_upd_omitir","")!==r.nov.version)aviso(r.nov);},9000);
+  setTimeout(()=>{guarda("atr_upd_ult",String(Date.now()));revisar(true);},6000);
+  setInterval(()=>{if(lee("atr_upd_auto","1")!=="0")revisar(true);},30*60*1000);
 })();
+window.Distrib._revisar=revisar;
 })();

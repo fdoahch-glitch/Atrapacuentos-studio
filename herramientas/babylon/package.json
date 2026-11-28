@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Empaqueta Babylon.js para usarlo sin internet dentro del programa.",
   "scripts": {
-    "build:etapa1": "esbuild src/etapa1.js --bundle --minify --format=iife --target=chrome120 --outfile=../../web/vendor/babylon-etapa1.js",
+    "build:etapa1": "esbuild src/etapa1.js --bundle --minify --format=iife --target=chrome120 --outfile=../../pruebas/gpu/babylon-etapa1.js",
     "build:motor": "esbuild src/motor.js --bundle --minify --format=iife --target=chrome120 --outfile=../../web/vendor/babylon-motor.js"
   },
   "dependencies": {

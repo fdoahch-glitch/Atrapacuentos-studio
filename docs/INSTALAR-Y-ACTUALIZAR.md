@@ -22,3 +22,12 @@ El flujo ya sabe firmar el `.exe`. Se activa solo si en GitHub → Settings → 
 
 ## Reportar un problema
 ❓ Ayuda → 🐞 Reportar un problema. Nada se envía solo: tú eliges copiar, guardar o abrir GitHub con el texto. No incluye proyecto, imágenes ni voces.
+
+## Versión nueva automática (cada cambio)
+- Cada cambio que llega a la rama `main` (o una etiqueta `v*`) compila Windows y Linux, corre las pruebas y, **si todo sale bien**, publica solo una
+  versión nueva en GitHub con sus instaladores. El número es `scripts/version-base.txt` + el número de ejecución (por ejemplo `1.2.57`).
+- El instalador queda con ese mismo número (`scripts/fijar-version.py` lo escribe en `tauri.conf.json` y en los `Cargo.toml` antes de compilar).
+- La aplicación instalada revisa GitHub al abrirse y cada 30 minutos. Si hay una versión más nueva aparece el botón verde **«⬆ vX.Y.Z»** en la
+  barra superior (no se puede descartar) y un aviso abajo a la derecha. Al pulsarlo se ven los cambios y «Descargar e instalar».
+- Para subir el «1.2» a «1.3», se edita `scripts/version-base.txt`.
+- Las ramas que no son `main` compilan pero **no publican**.
