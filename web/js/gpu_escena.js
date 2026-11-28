@@ -7,7 +7,7 @@
 (function(){
 "use strict";
 const LS="atr_motor_grafico";
-let tmrPend=0;const G={pendientes:0,activo:false,motor:"2d",estado:"apagado",canvas:null,W:0,H:0,fallo:"",ultimoMs:0};
+let tmrPend=0,grp=0;const G={pendientes:0,activo:false,motor:"2d",estado:"apagado",canvas:null,W:0,H:0,fallo:"",ultimoMs:0};
 let B=null,E=null,scene=null,cam=null,api=null;
 const texs=new Map(),mats=new Map(),capasBg=new Map(),quads=[],prox=[];let usados=0,usadosProx=0,cnt=0;
 const pref=()=>{try{return localStorage.getItem(LS)||"2d";}catch(e){return "2d";}};
@@ -33,7 +33,7 @@ function plano(){
 }
 /* coloca un plano: centro (cx,cy) en píxeles de lienzo (y hacia abajo), tamaño w×h, giro en radianes (horario, como el Canvas 2D) */
 function ubicar(q,mat,cx,cy,w,h,rot,op,orden){
-  q.material=mat;q.position.set(cx-G.W/2,G.H/2-cy,0);q.scaling.set(w,h,1);q.rotation.z=-(rot||0);q.visibility=op==null?1:op;q.alphaIndex=cnt++;
+  q.material=mat;q.position.set(cx-G.W/2,G.H/2-cy,0);q.scaling.set(w,h,1);q.rotation.z=-(rot||0);q.visibility=op==null?1:op;q.alphaIndex=cnt++;q.renderingGroupId=grp;
 }
 /* camino de respaldo: el elemento se dibuja con el código clásico en un lienzo 2D del tamaño del cuadro y se sube como textura */
 function proxy(){
@@ -158,19 +158,55 @@ function actorNativo(def,RO,info){
       for(let i=0;i<e.nv;i++){const x=e.xy[i*2],y=e.xy[i*2+1],dx=x-X,dy=y-oy;pos[i*3]=X+dx-lk[0]*dy-W/2;pos[i*3+1]=H/2-(oy+lk[1]*dy);pos[i*3+2]=0;
         const f=Math.max(0,Math.min(1,(Y-y)/Math.max(1,ht)));cl[i*4+3]=1+(.2-1)*f;}
       sh.updateVerticesData(B.VertexBuffer.PositionKind,pos);sh.updateVerticesData(B.VertexBuffer.ColorKind,cl);
-      sh.material=m;sh.visibility=lk[2];sh.alphaIndex=cnt++;sh.setEnabled(true);
+      sh.material=m;sh.visibility=lk[2];sh.alphaIndex=cnt++;sh.renderingGroupId=grp;sh.setEnabled(true);
     }
   }
   for(const [r,e] of lista){
     const m=matPieza(r.p,r.key,"");if(!m)continue;
-    e.mesh.updateVerticesData(B.VertexBuffer.PositionKind,e.pos);e.mesh.material=m;e.mesh.visibility=1;e.mesh.alphaIndex=cnt++;e.mesh.setEnabled(true);
+    e.mesh.updateVerticesData(B.VertexBuffer.PositionKind,e.pos);e.mesh.material=m;e.mesh.visibility=1;e.mesh.alphaIndex=cnt++;e.mesh.renderingGroupId=grp;e.mesh.setEnabled(true);
   }
+}
+
+/* ---------- modelos 3D (.glb) ---------- */
+const modelos=new Map(),usoM=new Set();
+function cargarModelo(it){
+  const def=api.modelos()[it.ref];if(!def||!def.url)return null;
+  let m=modelos.get(it.uid);if(m&&m.ref===it.ref)return m;
+  if(m)try{m.holder.dispose(false,true);}catch(e){}
+  m={ref:it.ref,estado:"cargando",holder:new B.TransformNode("m3d",scene),meshes:[],groups:[],H0:1,anc:.6};m.holder.setEnabled(false);modelos.set(it.uid,m);
+  B.SceneLoader.ImportMeshAsync("","",def.url,scene,null,".glb").then(res=>{
+    const root=res.meshes[0];root.parent=m.holder;
+    const bb=root.getHierarchyBoundingVectors(true),H0=Math.max(1e-4,bb.max.y-bb.min.y);
+    root.position.set(-(bb.max.x+bb.min.x)/2,-bb.min.y,-(bb.max.z+bb.min.z)/2);   /* los pies quedan en el origen */
+    m.H0=H0;m.anc=(bb.max.x-bb.min.x)/H0;m.meshes=res.meshes;m.groups=res.animationGroups||[];
+    for(const g of m.groups){g.start(false,1,g.from,g.to,false);g.pause();}
+    for(const me of res.meshes){me.alwaysSelectAsActiveMesh=true;me.isPickable=false;}
+    def.anims=m.groups.map(g=>g.name);m.estado="listo";
+    try{if(window.Studio){Studio.refit();if(window.Serie&&Serie.renderProps)Serie.renderProps();}}catch(e){}
+  }).catch(e=>{m.estado="error";console.warn("Modelo 3D:",e);try{if(window.Studio)Studio.say("⚠ No pude leer ese modelo 3D: "+(e&&e.message||e));}catch(x){}});
+  return m;
+}
+function dibujarModelo(sc,it,t,cam0,sx){
+  const z=cam0.z,P=api.pos(it,t),pf=api.pfOf(it.d),cx0=api.UW()/2;
+  const X=((P.x-cam0.x*pf-cx0)*z+cx0)*sx,Y=((P.y-cam0.y*pf*.5-360)*z+360)*sx,k=(P.s||1)*z*sx,hh=(it.h0||360)*k;
+  const m=cargarModelo(it);
+  const ww=hh*(m&&m.estado==="listo"?m.anc:.6);
+  it._bb={x:(X-ww/2)/sx,y:(Y-hh)/sx,w:ww/sx,h:hh/sx,X:X/sx,Y:Y/sx};
+  if(!m||m.estado!=="listo")return;
+  usoM.add(m);grp++;
+  const sc3=hh/m.H0,h=m.holder;h.setEnabled(true);
+  h.position.set(X-G.W/2,G.H/2-Y,0);h.scaling.set(sc3,sc3,sc3);h.rotation.y=((it.ry||0)+(it.flip?180:0))*Math.PI/180;h.rotation.z=-(P.r||0);
+  const g=m.groups.find(x=>x.name===it.anim)||m.groups[0];
+  if(g){const ta=g.targetedAnimations[0],fps=ta&&ta.animation?ta.animation.framePerSecond:60,largo=Math.max(1,g.to-g.from),f=g.from+((t*(it.vel==null?1:it.vel)*fps)%largo);g.goToFrame(f);}
+  for(const me of m.meshes){me.renderingGroupId=grp;if(me.visibility!==undefined)me.visibility=P.op==null?1:Math.max(0,Math.min(1,P.op));}
+  grp++;
 }
 
 /* ---------- elementos ---------- */
 let scratch=null;const TAU=Math.PI*2;
 function dibujarItem(sc,it,t,cam0,sx,orden,opt){
   const z=cam0.z,dd=it.d==null?60:it.d,dof=(sc.look&&sc.look.dof)||0;
+  if(it.kind==="modelo3d"){dibujarModelo(sc,it,t,cam0,sx);return;}
   if(it.kind==="actor"){
     const Pa=api.pos(it,t);
     /* con opacidad parcial (entradas/salidas) las piezas se verían a través unas de otras: ese caso va por el camino clásico */
@@ -222,9 +258,13 @@ G.iniciar=async function(motor){
     }
     E.setHardwareScalingLevel(1);
     scene=new B.Scene(E);scene.autoClear=true;scene.clearColor=new B.Color4(0,0,0,0);scene.skipPointerMovePicking=true;scene.autoClearDepthAndStencil=true;
-    cam=new B.FreeCamera("cam",new B.Vector3(0,0,-10),scene);cam.mode=B.Camera.ORTHOGRAPHIC_CAMERA;cam.setTarget(new B.Vector3(0,0,0));cam.minZ=1;cam.maxZ=100;
+    B.RenderingManager.MAX_RENDERINGGROUPS=16;
+    cam=new B.FreeCamera("cam",new B.Vector3(0,0,-1500),scene);cam.mode=B.Camera.ORTHOGRAPHIC_CAMERA;cam.setTarget(new B.Vector3(0,0,0));cam.minZ=10;cam.maxZ=4000;
     if(window.GPUAsp)GPUAsp.iniciar();
     /* precalentamiento: Babylon compila los shaders en segundo plano; se espera aquí para que el primer cuadro salga completo */
+    for(let i=1;i<16;i++)scene.setRenderingAutoClearDepthStencil(i,true,true,true);
+    {const h=new B.HemisphericLight("luz_amb",new B.Vector3(0,1,-.6),scene);h.intensity=.85;h.groundColor=new B.Color3(.55,.58,.55);
+     const d=new B.DirectionalLight("luz_sol",new B.Vector3(-.4,-.8,.6),scene);d.intensity=1.1;}
     G.W=1280;G.H=720;G.canvas=cv;
     {const c0=document.createElement("canvas");c0.width=c0.height=4;const q1=plano(),q2=plano(),q3=plano();
       ubicar(q1,matDe("warm",texDeCanvas("warm",c0,true)),2,2,4,4,0,1,0);ubicar(q2,matHora("tarde"),2,2,4,4,0,1,1);
@@ -242,7 +282,7 @@ G.iniciar=async function(motor){
   }catch(e){G.fallo=String(e&&e.message||e);G.estado="error";G.activo=false;console.warn("Motor GPU:",e);try{if(E)E.dispose();}catch(x){}E=null;scene=null;return false;}
 };
 G.apagar=function(){
-  G.activo=false;
+  G.activo=false;modelos.clear();
   try{if(scene)scene.dispose();if(E)E.dispose();}catch(e){}
   if(G.canvas&&G.canvas.parentNode)G.canvas.parentNode.removeChild(G.canvas);
   texs.clear();mats.clear();capasBg.clear();quads.length=0;prox.length=0;usados=usadosProx=0;scene=null;E=null;cam=null;G.canvas=null;G.estado="apagado";
@@ -252,6 +292,7 @@ G.limpiar=function(){
   if(!scene)return;
   for(const t of texs.values())try{t.dispose();}catch(e){}
   for(const m of mats.values())try{m.dispose();}catch(e){}
+  for(const m of modelos.values())try{m.holder.dispose(false,true);}catch(e){}modelos.clear();
   texs.clear();mats.clear();capasBg.clear();for(const q of quads)try{q.dispose();}catch(e){}quads.length=0;prox.length=0;
 };
 function medir(W,H){
@@ -266,12 +307,13 @@ G.render=function(sc,t,W,H,cam0,cam1,orden,opt){
   if(!G.activo||!scene)return false;
   const a0=performance.now();
   try{
-    medir(W,H);usados=0;usadosProx=0;cnt=0;usoPz.clear();for(const e of todosPz){e.mesh.setEnabled(false);if(e.sh)e.sh.setEnabled(false);}
+    medir(W,H);usados=0;usadosProx=0;cnt=0;grp=0;usoM.clear();usoPz.clear();for(const e of todosPz){e.mesh.setEnabled(false);if(e.sh)e.sh.setEnabled(false);}
     const sx=W/api.UW();
     let n=dibujarFondo(sc,cam1,sx,t);
     n=100;
     for(const it of orden){if(it.oculto)continue;dibujarItem(sc,it,t,cam0,sx,n++,opt);}
     if(sc.hora==="tarde"||sc.hora==="noche"){const q=plano();ubicar(q,matHora(sc.hora),W/2,H/2,W,H,0,1,n++);}
+    for(const m of modelos.values())if(!usoM.has(m))m.holder.setEnabled(false);
     for(let i=usados;i<quads.length;i++)quads[i].setEnabled(false);
     /* si algún shader aún se está compilando (pasa solo la primera vez que aparece algo nuevo), este cuadro sale por el dibujo clásico y se repite enseguida */
     let pend=false;for(const m of scene.meshes)if(m.isEnabled()&&!m.isReady(true))pend=true;
@@ -288,6 +330,7 @@ G.render=function(sc,t,W,H,cam0,cam1,orden,opt){
 G._top=()=>scene.meshes.filter(m=>m.isEnabled()).sort((a,b)=>b.alphaIndex-a.alphaIndex).slice(0,3).map(m=>[m.name,m.alphaIndex,m.material&&m.material.name,m.isReady(true),m.visibility]);
 G._dbg2=()=>({piezas:todosPz.length,activos:scene.meshes.filter(m=>m.isEnabled()).length,pz:scene.meshes.filter(m=>m.name==="pz"&&m.isEnabled()).map(m=>[!!m.material,m.visibility,m.alphaIndex,m.getTotalVertices(),m.isReady(true),m.material&&m.material.isReady(m)]).slice(0,5)});
 G._dbg=()=>({scene:scene.isReady(),meshes:scene.meshes.map(m=>[m.name,m.isEnabled(),m.isReady(true),m.material&&m.material.isReady(m)]),pend:scene._pendingData&&scene._pendingData.length,texturas:scene.textures.map(t=>[t.name,t.isReady()])});
+G._mod=()=>[...modelos.values()].map(m=>m.estado);
 G.preferencia=pref;
 G.elegir=async function(v){
   guardar(v);
